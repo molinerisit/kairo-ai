@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { env } from './config/env';
+import authRoutes from './modules/auth/auth.routes';
 
 const app = express();
 
@@ -21,7 +22,12 @@ app.use(cors({
 // express.json: parsea el body de las requests como JSON
 app.use(express.json());
 
-// ── Health check ──────────────────────────────────────────────────
+// ── Rutas ─────────────────────────────────────────────────────────
+// Montamos cada módulo con su prefijo.
+// Todos los endpoints de auth quedan bajo /api/auth/
+app.use('/api/auth', authRoutes);
+
+// ── Health check ────────────────────────────────���─────────────────
 // Endpoint simple para verificar que el servidor está corriendo.
 // Usado por CI/CD y servicios de monitoreo.
 app.get('/health', (_req, res) => {
