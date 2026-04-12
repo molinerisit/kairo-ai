@@ -29,5 +29,10 @@ pool.on('error', (err) => {
 
 // query: wrapper que expone el pool de forma limpia al resto de la app.
 // Usar esto en lugar de importar pool directamente en cada módulo.
-export const query = (text: string, params?: unknown[]) =>
-  pool.query(text, params);
+// El genérico <T> permite tipar las filas del resultado:
+// query<{ id: string; email: string }>('SELECT id, email FROM users')
+// devuelve QueryResult<{ id: string; email: string }>
+export const query = <T extends object = Record<string, unknown>>(
+  text: string,
+  params?: unknown[]
+) => pool.query<T>(text, params);
