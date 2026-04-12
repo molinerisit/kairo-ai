@@ -18,6 +18,7 @@
 10. [Convenciones del proyecto](#10-convenciones-del-proyecto)
 11. [Glosario de términos técnicos](#11-glosario-de-términos-técnicos)
 12. [Preguntas frecuentes de entrevista](#12-preguntas-frecuentes-de-entrevista)
+13. [Sprint 1 — Log de decisiones técnicas](#13-sprint-1--log-de-decisiones-técnicas)
 
 ---
 
@@ -403,6 +404,135 @@ AI_API_KEY=
 ### "¿Qué es un índice en base de datos y cuándo lo usás?"
 
 > "Un índice es una estructura que acelera búsquedas en columnas frecuentemente filtradas. Sin índice, una query hace un full table scan (lee toda la tabla). Lo creo en columnas que aparecen en WHERE frecuentemente. Por ejemplo, `tenant_id` en todas las tablas de negocio, porque casi toda query filtra por tenant. El trade-off es que los índices usan espacio en disco y ralentizan ligeramente los writes."
+
+---
+
+## 13. Sprint 1 — Log de decisiones técnicas
+
+> Esta sección documenta cada decisión tomada durante el Sprint 1, en orden cronológico. Sirve para entender el "por qué" detrás de cada elección.
+
+---
+
+### Issue #1 — Schema inicial de PostgreSQL
+
+**Branch:** `chore/KAI-01-db-schema`
+
+#### Setup del proyecto Node.js
+
+**Comando usado:**
+```bash
+cd apps/api
+npm init -y
+npm install express pg dotenv zod bcryptjs jsonwebtoken cors helmet
+npm install -D typescript tsx nodemon @types/express @types/pg @types/bcryptjs @types/jsonwebtoken @types/cors @types/node eslint @typescript-eslint/eslint-plugin @typescript-eslint/parser
+```
+
+**Por qué cada dependencia:**
+
+| Paquete | Para qué sirve |
+|---|---|
+| `express` | Framework web para crear los endpoints de la API |
+| `pg` | Cliente de PostgreSQL para Node.js (pool de conexiones) |
+| `dotenv` | Carga variables de entorno desde el archivo `.env` |
+| `zod` | Validación de schemas — valida variables de entorno y datos de entrada |
+| `bcryptjs` | Hash de passwords. Nunca se guarda el password en texto plano |
+| `jsonwebtoken` | Generación y verificación de JWT (tokens de autenticación) |
+| `cors` | Permite que el frontend llame a la API desde otro dominio/puerto |
+| `helmet` | Agrega headers HTTP de seguridad automáticamente |
+| `typescript` | Tipado estático — detecta errores antes de correr el código |
+| `tsx` | Ejecuta TypeScript directamente en desarrollo, sin compilar |
+| `nodemon` | Reinicia el servidor automáticamente al guardar un archivo |
+
+**tsconfig.json — opciones clave:**
+- `"strict": true` — activa todas las verificaciones de tipos estrictas. Encuentra más bugs en tiempo de compilación.
+- `"target": "ES2022"` — compila a JavaScript moderno. Node.js 20 lo soporta.
+- `"esModuleInterop": true` — permite importar módulos CommonJS con `import x from 'x'` en lugar de `require`.
+
+---
+
+#### Estructura de carpetas del backend
+
+```
+apps/api/
+├── db/
+│   └── schema.sql        ← Schema de la base de datos
+├── src/
+│   ├── config/
+│   │   └── env.ts        ← Validación de variables de entorno con Zod
+│   ├── shared/
+│   │   └── db/
+│   │       └── pool.ts   ← Conexión a PostgreSQL (pool reutilizable)
+│   └── server.ts         ← Punto de entrada del servidor Express
+├── .env                  ← Variables locales (NO se commitea)
+├── .env.example          ← Plantilla de variables (SÍ se commitea)
+├── package.json
+└── tsconfig.json
+```
+
+**Por qué `src/shared/db/pool.ts` y no conectar directo en cada archivo:**
+Un Pool de conexiones es un recurso caro. Si cada módulo creara su propia conexión, terminaríamos con cientos de conexiones abiertas. Centralizarlo en un archivo y exportar la función `query` garantiza que toda la app comparte el mismo pool.
+
+---
+
+#### Decisiones del schema.sql
+
+**Por qué `CHECK` constraints en `plan` y `status`:**
+```sql
+plan TEXT NOT NULL DEFAULT 'starter'
+     CHECK (plan IN ('starter', 'growth', 'executive'))
+```
+Esto garantiza a nivel de base de datos que solo existan valores válidos. Si el código tiene un bug y intenta insertar `plan = 'gratis'`, la base de datos lo rechaza con un error. Es una red de seguridad adicional.
+
+**Por qué `TIMESTAMPTZ` y no `TIMESTAMP`:**
+`TIMESTAMPTZ` (timestamp con zona horaria) guarda el momento exacto en UTC internamente. Cuando el servidor o la base de datos cambian de zona horaria, los datos siguen siendo correctos. `TIMESTAMP` sin zona horaria puede generar inconsistencias si los servidores están en distintas zonas.
+
+**Por qué el trigger `update_updated_at`:**
+```sql
+CREATE TRIGGER tenants_updated_at
+  BEFORE UPDATE ON tenants
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+```
+Sin el trigger, habría que acordarse de actualizar `updated_at` manualmente en cada UPDATE del código. El trigger lo hace automáticamente a nivel de base de datos, sin importar quién o qué actualice la fila.
+
+**Por qué JSONB para `settings`, `hours`, `services`, `faqs`:**
+Estas estructuras varían por negocio. Un consultorio tiene horarios distintos a una peluquería. Los servicios de un taller no se parecen a los de una estética. JSONB permite guardar estas estructuras flexibles sin crear una tabla nueva para cada variante. PostgreSQL puede además indexar y consultar dentro del JSONB si es necesario.
+
+---
+
+#### Validación de entorno con Zod (env.ts)
+
+```typescript
+const envSchema = z.object({
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL es requerida'),
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET debe tener al menos 32 caracteres'),
+  // ...
+});
+
+const parsed = envSchema.safeParse(process.env);
+if (!parsed.success) {
+  console.error(parsed.error.flatten().fieldErrors);
+  process.exit(1);  // El servidor no arranca si falta algo crítico
+}
+```
+
+**Por qué esto es importante:** sin esta validación, el servidor arranca aunque falte `DATABASE_URL`. El error aparece horas después cuando alguien intenta hacer un query. Con la validación, el error aparece al segundo de intentar arrancar y dice exactamente qué falta.
+
+**Nota sobre Zod v4:** en Zod v3 se usaba `z.string({ required_error: 'mensaje' })`. En Zod v4 eso cambió — ahora se usa `z.string().min(1, 'mensaje')`. Esta es una breaking change (cambio que rompe compatibilidad) que descubrimos al compilar.
+
+---
+
+#### Cómo correr el schema en PostgreSQL
+
+```bash
+# Opción 1: desde terminal con psql
+psql -U postgres -d kairo_dev -f apps/api/db/schema.sql
+
+# Opción 2: desde pgAdmin o TablePlus
+# Abrir el archivo schema.sql y ejecutarlo en la base de datos kairo_dev
+
+# Verificar que las tablas se crearon:
+psql -U postgres -d kairo_dev -c "\dt"
+```
 
 ---
 
