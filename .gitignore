@@ -1,0 +1,45 @@
+# ─────────────────────────────────────────
+# Node.js (Backend API)
+# ─────────────────────────────────────────
+node_modules/
+dist/
+build/
+.env
+.env.local
+.env.*.local
+npm-debug.log*
+yarn-error.log
+*.log
+
+# ─────────────────────────────────────────
+# Flutter Web (Frontend)
+# ─────────────────────────────────────────
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+apps/web/build/
+apps/web/.dart_tool/
+
+# ─────────────────────────────────────────
+# Sistema operativo
+# ─────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─────────────────────────────────────────
+# Editores / IDEs
+# ─────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.suo
+*.user
+
+# ─────────────────────────────────────────
+# Cobertura de tests
+# ─────────────────────────────────────────
+coverage/
+.nyc_output/
