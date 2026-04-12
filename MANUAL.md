@@ -536,4 +536,170 @@ psql -U postgres -d kairo_dev -c "\dt"
 
 ---
 
+---
+
+### Issue #2 — Endpoint de registro (POST /api/auth/register)
+
+**Branch:** `feature/KAI-02-auth-registro`
+
+#### Archivos creados
+
+```
+src/modules/auth/
+├── auth.schema.ts      ← Validación Zod del body del request
+├── auth.types.ts       ← Tipos TypeScript (AuthResponse, JwtPayload)
+├── auth.service.ts     ← Lógica de negocio (transacción, hash, JWT)
+├── auth.controller.ts  ← Handler HTTP (recibe request, responde)
+└── auth.routes.ts      ← Define los endpoints del módulo
+
+src/shared/lib/
+└── jwt.ts              ← signToken y verifyToken centralizados
+```
+
+#### El patrón Routes → Controller → Service
+
+```
+Request HTTP
+    ↓
+auth.routes.ts      → define qué función maneja qué URL
+    ↓
+auth.controller.ts  → valida entrada, maneja errores HTTP
+    ↓
+auth.service.ts     → lógica de negocio pura (no sabe de HTTP)
+    ↓
+base de datos
+```
+
+**Por qué esta separación:**
+- El **service** no sabe que existe Express. Si mañana cambiamos Express por otro framework, el service no cambia.
+- El **controller** no tiene lógica de negocio. Solo traduce entre HTTP y el service.
+- El **schema** valida los datos antes de que lleguen al service. El service nunca recibe datos sucios.
+
+---
+
+#### Transacciones en PostgreSQL
+
+```typescript
+const client = await pool.connect(); // tomar conexión dedicada del pool
+
+try {
+  await client.query('BEGIN');        // iniciar transacción
+
+  // operaciones...
+  await client.query('INSERT INTO tenants ...');
+  await client.query('INSERT INTO business_profiles ...');
+  await client.query('INSERT INTO users ...');
+
+  await client.query('COMMIT');       // confirmar todo junto
+} catch (err) {
+  await client.query('ROLLBACK');     // revertir si algo falló
+  throw err;
+} finally {
+  client.release();                   // SIEMPRE devolver al pool
+}
+```
+
+**Por qué `pool.connect()` y no `pool.query()` para transacciones:**
+`pool.query()` puede usar cualquier conexión disponible del pool para cada llamada. Si usáramos `pool.query('BEGIN')` y luego `pool.query('INSERT...')`, esas dos llamadas podrían ir a conexiones distintas. La transacción solo existe en una conexión. Necesitamos `pool.connect()` para tener una conexión fija durante toda la transacción.
+
+**El bloque `finally`:**
+`client.release()` debe ejecutarse SIEMPRE — tanto si la operación fue exitosa como si falló. Si no liberamos el cliente, el pool se agota después de N operaciones y el servidor deja de responder. El bloque `finally` garantiza que se ejecute sin importar qué.
+
+---
+
+#### Hashing de passwords con bcrypt
+
+```typescript
+const SALT_ROUNDS = 12;
+const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
+```
+
+**Cómo funciona bcrypt:**
+1. Genera un "salt" (cadena aleatoria) único para este password
+2. Combina password + salt y aplica el algoritmo 2^12 veces
+3. El resultado incluye el salt dentro del hash
+
+```
+$2a$12$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy
+      ↑↑                                ↑
+      12 rondas                    salt incluido
+```
+
+**Por qué no MD5 o SHA256 para passwords:**
+MD5/SHA son rápidos por diseño (para firmar archivos). Bcrypt es lento por diseño. "Lento" aquí es una ventaja: si alguien roba la base de datos e intenta crackear los passwords por fuerza bruta, con bcrypt tardaría siglos.
+
+**Por qué `SALT_ROUNDS = 12` y no más:**
+- 10 rondas ≈ 100ms (algunos servicios lo usan)
+- 12 rondas ≈ 250ms ← balance recomendado para APIs web
+- 14 rondas ≈ 1000ms (demasiado lento para login frecuente)
+
+---
+
+#### JWT — Cómo funciona
+
+```typescript
+const token = jwt.sign(
+  { user_id, tenant_id, role },  // payload (datos visibles, no secretos)
+  env.JWT_SECRET,                 // secret para firmar
+  { expiresIn: '15m' }           // vence en 15 minutos
+);
+```
+
+Un JWT tiene 3 partes separadas por `.`:
+```
+eyJhbGciOiJIUzI1NiJ9      ← Header (algoritmo)
+.eyJ1c2VyX2lkIjoiYWJjIn0  ← Payload (datos, en base64 — no cifrados)
+.SflKxwRJSMeKKF2QT4fwpMeJ  ← Signature (firmada con el secret)
+```
+
+**El payload NO está cifrado** — cualquiera puede leerlo con base64. El secret solo garantiza que no fue modificado. Por eso no se ponen datos sensibles (passwords, números de tarjeta) en el JWT.
+
+**Por qué expira en 15 minutos:**
+Si alguien roba el token, tiene acceso por 15 minutos máximo. En el issue #3 (login) se implementa el refresh token para renovarlo sin pedir password de nuevo.
+
+---
+
+#### Validación de entrada con Zod y manejo de errores
+
+```typescript
+// En el controller:
+const parsed = registerSchema.safeParse(req.body);
+
+if (!parsed.success) {
+  res.status(400).json({
+    error: 'Datos inválidos',
+    details: parsed.error.flatten().fieldErrors,
+  });
+  return;
+}
+```
+
+**`safeParse` vs `parse`:**
+- `parse()` lanza una excepción si falla → hay que envolverlo en try/catch
+- `safeParse()` devuelve un objeto `{ success, data | error }` → más limpio en controllers
+
+**Respuesta 400 con detalles:**
+```json
+{
+  "error": "Datos inválidos",
+  "details": {
+    "email": ["Email inválido"],
+    "password": ["La contraseña debe tener al menos 8 caracteres"]
+  }
+}
+```
+El frontend puede mostrar cada error al lado del campo correspondiente.
+
+---
+
+#### Endpoints implementados hasta ahora
+
+| Método | URL | Descripción | Status |
+|---|---|---|---|
+| GET | /health | Verificar que el servidor corre | ✅ |
+| POST | /api/auth/register | Crear cuenta nueva | ✅ |
+| POST | /api/auth/login | Iniciar sesión | 🔜 Issue #3 |
+
+---
+
 *Este manual fue generado al inicio del proyecto Kairo AI — Abril 2026.*
