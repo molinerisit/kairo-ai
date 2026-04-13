@@ -112,3 +112,101 @@ CREATE TRIGGER users_updated_at
 CREATE TRIGGER business_profiles_updated_at
   BEFORE UPDATE ON business_profiles
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ────────────────────────────────────────────────────────────────
+-- DYNAMIC TABLES — Tablas personalizadas por tenant
+-- Cada negocio puede crear sus propias tablas (CRM, leads, inventario…)
+-- Las columnas se almacenan como JSONB para máxima flexibilidad.
+-- ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS dynamic_tables (
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   UUID        NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  name        TEXT        NOT NULL,
+  -- table_type: permite identificar tablas especiales (crm, appointments, custom)
+  table_type  TEXT        NOT NULL DEFAULT 'custom',
+  -- columns: array JSONB de definiciones de columna
+  -- ej: [{"id": "uuid", "name": "Nombre", "type": "text", "required": true}]
+  columns     JSONB       NOT NULL DEFAULT '[]',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_dynamic_tables_tenant_id ON dynamic_tables(tenant_id);
+
+CREATE TRIGGER dynamic_tables_updated_at
+  BEFORE UPDATE ON dynamic_tables
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ────────────────────────────────────────────────────────────────
+-- DYNAMIC ROWS — Filas de las tablas personalizadas
+-- Los valores de cada fila se almacenan en JSONB.
+-- Clave del mapa: el id de la columna (UUID). Valor: el dato.
+-- ej: { "col-uuid-1": "Juan", "col-uuid-2": "+54911..." }
+-- ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS dynamic_rows (
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   UUID        NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  table_id    UUID        NOT NULL REFERENCES dynamic_tables(id) ON DELETE CASCADE,
+  data        JSONB       NOT NULL DEFAULT '{}',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_dynamic_rows_table_id  ON dynamic_rows(table_id);
+CREATE INDEX IF NOT EXISTS idx_dynamic_rows_tenant_id ON dynamic_rows(tenant_id);
+-- Índice GIN para búsquedas dentro del JSONB (ej: buscar por valor de columna)
+CREATE INDEX IF NOT EXISTS idx_dynamic_rows_data ON dynamic_rows USING GIN(data);
+
+CREATE TRIGGER dynamic_rows_updated_at
+  BEFORE UPDATE ON dynamic_rows
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ────────────────────────────────────────────────────────────────
+-- CALENDAR EVENTS — Turnos y eventos del calendario
+-- ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS calendar_events (
+  id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id    UUID        NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  title        TEXT        NOT NULL,
+  description  TEXT,
+  starts_at    TIMESTAMPTZ NOT NULL,
+  ends_at      TIMESTAMPTZ NOT NULL,
+  status       TEXT        NOT NULL DEFAULT 'scheduled'
+               CHECK (status IN ('scheduled', 'confirmed', 'cancelled', 'completed')),
+  -- contact_data: nombre, teléfono del cliente asociado al evento
+  contact_data JSONB       NOT NULL DEFAULT '{}',
+  -- metadata: campos extra flexibles (ej: servicio, empleado asignado)
+  metadata     JSONB       NOT NULL DEFAULT '{}',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_calendar_events_tenant_id ON calendar_events(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_calendar_events_starts_at ON calendar_events(starts_at);
+
+CREATE TRIGGER calendar_events_updated_at
+  BEFORE UPDATE ON calendar_events
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ────────────────────────────────────────────────────────────────
+-- AI LOGS — Registro de interacciones de los agentes de IA
+-- Sirve para auditoría, debugging y mejora del sistema.
+-- ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS ai_logs (
+  id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id    UUID        NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  -- agent_type: qué tipo de agente generó este log (secretary, vendor, support)
+  agent_type   TEXT        NOT NULL,
+  -- channel: por dónde llegó el mensaje (whatsapp, web, api)
+  channel      TEXT        NOT NULL DEFAULT 'api',
+  -- input/output: el mensaje recibido y la respuesta generada
+  input        TEXT        NOT NULL,
+  output       TEXT,
+  -- tokens_used: para monitorear costos de la API de IA
+  tokens_used  INTEGER,
+  -- latency_ms: tiempo de respuesta en milisegundos
+  latency_ms   INTEGER,
+  -- error: si hubo un error, se guarda aquí para debugging
+  error        TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);

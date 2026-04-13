@@ -4,7 +4,7 @@
   "description": "Kairo AI — Backend API",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "nodemon --exec tsx src/server.ts",
+    "dev": "nodemon --exec \"node --import tsx/esm src/server.ts\" --ext ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "lint": "eslint src",
