@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { query } from '../../shared/db/pool';
 import { signToken } from '../../shared/lib/jwt';
+import { createRefreshToken } from './auth.refresh.service';
 import type { LoginInput } from './auth.schema';
 import type { AuthResponse } from './auth.types';
 
@@ -46,14 +47,17 @@ export async function login(input: LoginInput): Promise<AuthResponse> {
     throw { statusCode: 401, message: INVALID_CREDENTIALS };
   }
 
-  const access_token = signToken({
+  const access_token  = signToken({
     user_id: user.id,
     tenant_id: user.tenant_id,
     role: user.role,
   });
 
+  const refresh_token = await createRefreshToken(user.id, user.tenant_id);
+
   return {
     access_token,
+    refresh_token,
     token_type: 'Bearer',
     user: {
       id: user.id,

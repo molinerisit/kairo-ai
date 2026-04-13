@@ -9,6 +9,9 @@ export interface AuthUser {
 
 export interface AuthResponse {
   access_token: string;
+  // refresh_token: token opaco (UUID) de larga duración (7 días)
+  // Se usa para obtener un nuevo access_token sin re-login
+  refresh_token: string;
   token_type: 'Bearer';
   user: AuthUser;
 }

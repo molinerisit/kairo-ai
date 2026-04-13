@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { pool } from '../../shared/db/pool';
 import { signToken } from '../../shared/lib/jwt';
+import { createRefreshToken } from './auth.refresh.service';
 import type { RegisterInput } from './auth.schema';
 import type { AuthResponse } from './auth.types';
 
@@ -87,8 +88,12 @@ export async function register(input: RegisterInput): Promise<AuthResponse> {
       role: user.role,
     });
 
+    // Generar refresh token (UUID opaco, guardado en DB, dura 7 días)
+    const refresh_token = await createRefreshToken(user.id, tenantId);
+
     return {
       access_token,
+      refresh_token,
       token_type: 'Bearer',
       user: {
         id: user.id,

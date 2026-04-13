@@ -16,10 +16,15 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoading  => _isLoading;
   String? get error   => _error;
 
-  // checkSession: se llama al iniciar la app para ver si ya hay sesión activa.
+  // checkSession: verifica si hay sesión activa.
+  // Si el access token vencido pero hay refresh token válido, renueva automáticamente.
   Future<void> checkSession() async {
     _isLoggedIn = await AuthService.isLoggedIn();
-    notifyListeners(); // notifica a los widgets que deben redibujarse
+    if (!_isLoggedIn) {
+      // Intentar renovar con refresh token antes de declarar que no hay sesión
+      _isLoggedIn = await AuthService.refreshToken();
+    }
+    notifyListeners();
   }
 
   Future<void> login(String email, String password) async {
