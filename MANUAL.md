@@ -1276,4 +1276,105 @@ En entrevistas, si te preguntan "¿qué mejorarías de este proyecto?", la respu
 
 ---
 
+## 14. Sprint 1 — Review y Retrospectiva
+
+### Sprint Review (Revisión del Sprint)
+
+La **Sprint Review** es la reunión al final del sprint donde se demuestra lo que se construyó. Se presenta a stakeholders (inversores, clientes, equipo) con una demo en vivo, no con slides.
+
+**Fecha:** 12 de Abril 2026  
+**Sprint:** 1 — "Base funcional del sistema"  
+**Duración:** ~1 semana  
+
+#### ✅ Qué se completó (todas las 7 issues)
+
+| Issue | Título | Estado |
+|-------|--------|--------|
+| #1 | Setup monorepo y estructura inicial | ✅ Completo |
+| #2 | Base de datos — schema PostgreSQL | ✅ Completo |
+| #3 | Auth — registro y login con JWT | ✅ Completo |
+| #4 | Auth middleware y rutas protegidas | ✅ Completo |
+| #5 | Tablas dinámicas — CRUD backend | ✅ Completo |
+| #6 | Flutter — pantalla de login | ✅ Completo |
+| #7 | Flutter — tabla dinámica con edición inline | ✅ Completo |
+
+#### Demo ejecutada en vivo — resultados
+
+```
+1. GET  /health                    → 200 {"status":"ok"}
+2. POST /api/auth/register         → 201 {access_token, user}
+3. POST /api/auth/login            → 200 {access_token, user}
+4. GET  /api/me                    → 200 {user: {user_id, tenant_id, role}}
+5. POST /api/tables                → 201 {id, name, columns: [...]}
+6. POST /api/tables/:id/rows       → 201 {id, data: {...}}
+7. GET  /api/tables/:id/rows       → 200 [{id, data: {...}}]
+8. GET  /api/tables                → 200 [{id, name, columns: [...]}]
+```
+
+**Issue encontrado durante la demo:** Las tablas `dynamic_tables` y `dynamic_rows` no habían sido incluidas en el `schema.sql` inicial. Fix: se completó el schema y se aplicó via `psql` directamente (DT-03 — sin sistema de migraciones aún).
+
+**Frontend Flutter:** app corriendo en `http://localhost:8080` — login, sidebar, tabla dinámica con edición inline, confirmación de eliminación.
+
+---
+
+### Lección aprendida — bug del schema
+
+**Qué pasó:** El `schema.sql` solo tenía las tablas de auth (`tenants`, `users`, `business_profiles`). Las tablas de la feature dinámica se olvidaron. Todos los tests fallaban con "Error interno del servidor".
+
+**Cómo se diagnosticó:** Al no ver el error en el código, se inspeccionó la base de datos directamente con `psql -c "\dt"` y se vio que las tablas no existían.
+
+**Lección:** El controller siempre loguea el error con `console.error('[Tables]', err)`. En producción real, un sistema de logging centralizado (DT-08) haría el diagnóstico instantáneo.
+
+---
+
+### Retrospectiva del Sprint
+
+La **Retrospectiva** es una reunión interna del equipo para mejorar el proceso de trabajo.
+
+**Formato:** ¿Qué salió bien? / ¿Qué mejorar? / ¿Acciones concretas?
+
+**Salió bien:**
+- Arquitectura multi-tenant limpia desde el inicio
+- Decisiones documentadas en MANUAL.md facilitan retomar el trabajo
+- Commit semánticos permiten entender el historial sin leer el código
+
+**Para mejorar:**
+- El schema.sql debe validarse contra la base de datos antes del final del sprint
+- Los errores 500 deberían incluir más detalle en desarrollo (DT-08)
+- La deuda técnica DT-03 (sin migraciones) ya causó un problema — priorizar en Sprint 2
+
+**Acciones para Sprint 2:**
+1. Implementar refresh token (DT-01) — sesión rota es blocker de UX
+2. Sistema de migraciones con `node-pg-migrate` (DT-03)
+3. Rate limiting en auth (DT-04) — seguridad básica
+4. Empezar módulo de conversaciones (WhatsApp-like UI)
+
+---
+
+## 15. Sprint 2 — Planificación
+
+### Objetivo del Sprint 2: "Conversaciones y estabilidad"
+
+**Épica:** El negocio puede ver y gestionar conversaciones de WhatsApp. El sistema es más estable con refresh token y migraciones.
+
+#### Issues propuestos para Sprint 2
+
+| # | Issue | Tipo | Prioridad |
+|---|-------|------|-----------|
+| #8  | Refresh token — sesión persistente sin re-login | Backend | Alta |
+| #9  | Migraciones de DB con node-pg-migrate | Infra | Alta |
+| #10 | Rate limiting en endpoints de auth | Backend | Alta |
+| #11 | Módulo de conversaciones — modelo de datos y API | Backend | Media |
+| #12 | Flutter — pantalla de conversaciones (lista + detalle) | Frontend | Media |
+| #13 | HTTP interceptor en Flutter — centralizar auth headers | Frontend | Media |
+| #14 | Calendario — modelo de datos y endpoints CRUD | Backend | Baja |
+
+#### Cómo se estima en un sprint real
+
+En empresas se usan **story points** (puntos de historia): números de la secuencia Fibonacci (1, 2, 3, 5, 8, 13) que representan complejidad relativa, no horas. Un equipo hace **Planning Poker** donde cada miembro vota independientemente y se discuten las diferencias.
+
+Para este proyecto trabajamos de forma simplificada con prioridades Alta/Media/Baja.
+
+---
+
 *Este manual fue generado al inicio del proyecto Kairo AI — Abril 2026.*
