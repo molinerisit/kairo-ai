@@ -4,7 +4,7 @@ export const createConversationSchema = z.object({
   channel:       z.enum(['whatsapp', 'web', 'api']).default('whatsapp'),
   contact_phone: z.string().optional(),
   contact_name:  z.string().optional(),
-  metadata:      z.record(z.unknown()).default({}),
+  metadata:      z.record(z.string(), z.unknown()).default({}),
 });
 
 export const updateConversationSchema = z.object({
