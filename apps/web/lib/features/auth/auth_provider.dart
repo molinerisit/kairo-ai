@@ -11,10 +11,12 @@ class AuthProvider extends ChangeNotifier {
   bool _isLoggedIn = false;
   bool _isLoading  = false;
   String? _error;
+  String? _userEmail;
 
-  bool get isLoggedIn => _isLoggedIn;
-  bool get isLoading  => _isLoading;
-  String? get error   => _error;
+  bool    get isLoggedIn => _isLoggedIn;
+  bool    get isLoading  => _isLoading;
+  String? get error      => _error;
+  String? get userEmail  => _userEmail;
 
   // checkSession: verifica si hay sesión activa.
   // Si el access token vencido pero hay refresh token válido, renueva automáticamente.
@@ -24,6 +26,7 @@ class AuthProvider extends ChangeNotifier {
       // Intentar renovar con refresh token antes de declarar que no hay sesión
       _isLoggedIn = await AuthService.refreshToken();
     }
+    if (_isLoggedIn) _userEmail = await AuthService.getUserEmail();
     notifyListeners();
   }
 
@@ -35,6 +38,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       await AuthService.login(email: email, password: password);
       _isLoggedIn = true;
+      _userEmail  = await AuthService.getUserEmail();
     } catch (e) {
       _error = e.toString().replaceFirst('Exception: ', '');
       _isLoggedIn = false;
@@ -47,7 +51,8 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     await AuthService.logout();
     _isLoggedIn = false;
-    _error = null;
+    _userEmail  = null;
+    _error      = null;
     notifyListeners();
   }
 }

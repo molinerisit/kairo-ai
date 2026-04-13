@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 const String _apiBase       = 'http://localhost:3000';
 const String _accessKey     = 'access_token';
 const String _refreshKey    = 'refresh_token';
+const String _emailKey      = 'user_email';
 
 class AuthService {
   // login: llama a POST /api/auth/login y persiste ambos tokens.
@@ -24,6 +25,8 @@ class AuthService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_accessKey,  body['access_token']  as String);
       await prefs.setString(_refreshKey, body['refresh_token'] as String);
+      final user = body['user'] as Map<String, dynamic>?;
+      if (user != null) await prefs.setString(_emailKey, user['email'] as String? ?? '');
       return;
     }
 
@@ -52,6 +55,13 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_accessKey);
     await prefs.remove(_refreshKey);
+    await prefs.remove(_emailKey);
+  }
+
+  // getUserEmail: devuelve el email del usuario logueado (guardado al hacer login).
+  static Future<String?> getUserEmail() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_emailKey);
   }
 
   // getToken: devuelve el access token guardado, o null si no hay sesión.
