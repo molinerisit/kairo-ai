@@ -520,6 +520,15 @@ class _MessageInputState extends State<_MessageInput> {
     _focus.requestFocus();
   }
 
+  void _useSuggestion(String suggestion, ConversationProvider provider) {
+    _ctrl.text = suggestion;
+    _ctrl.selection = TextSelection.fromPosition(
+      TextPosition(offset: suggestion.length),
+    );
+    provider.clearAgentSuggestion();
+    _focus.requestFocus();
+  }
+
   @override
   void dispose() {
     _ctrl.dispose();
@@ -529,48 +538,121 @@ class _MessageInputState extends State<_MessageInput> {
 
   @override
   Widget build(BuildContext context) {
-    final isSending = context.watch<ConversationProvider>().isSending;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _ctrl,
-              focusNode: _focus,
-              style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
-              decoration: InputDecoration(
-                hintText: 'Escribí un mensaje...',
-                hintStyle: const TextStyle(color: AppColors.textSecondary),
-                filled: true,
-                fillColor: AppColors.surfaceLight,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide.none,
+    final provider        = context.watch<ConversationProvider>();
+    final isSending       = provider.isSending;
+    final isInvokingAgent = provider.isInvokingAgent;
+    final suggestion      = provider.agentSuggestion;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // ── Chip de sugerencia del agente ──────────────────────────────────
+        if (suggestion != null)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.smart_toy_outlined, size: 13, color: AppColors.primary),
+                    const SizedBox(width: 6),
+                    const Text('Sugerencia del agente',
+                        style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w600)),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: provider.clearAgentSuggestion,
+                      child: const Icon(Icons.close, size: 14, color: AppColors.textSecondary),
+                    ),
+                  ],
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                isDense: true,
-              ),
-              onSubmitted: (_) => _send(),
-              maxLines: null, // permite multilínea
-              keyboardType: TextInputType.multiline,
+                const SizedBox(height: 6),
+                Text(suggestion,
+                    style: const TextStyle(color: AppColors.textPrimary, fontSize: 13)),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () => _useSuggestion(suggestion, provider),
+                    icon: const Icon(Icons.edit_outlined, size: 13),
+                    label: const Text('Usar sugerencia', style: TextStyle(fontSize: 12)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 8),
-          AnimatedOpacity(
-            opacity: isSending ? 0.5 : 1.0,
-            duration: const Duration(milliseconds: 150),
-            child: IconButton(
-              onPressed: isSending ? null : _send,
-              icon: const Icon(Icons.send_rounded),
-              color: AppColors.primary,
-              style: IconButton.styleFrom(
-                backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+
+        // ── Fila del input ────────────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              // Botón IA
+              Tooltip(
+                message: 'Sugerir respuesta con IA',
+                child: IconButton(
+                  onPressed: (isSending || isInvokingAgent) ? null : () => provider.invokeAgent(),
+                  icon: isInvokingAgent
+                      ? const SizedBox(width: 16, height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
+                      : const Icon(Icons.auto_awesome_outlined, size: 18),
+                  color: AppColors.primary,
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _ctrl,
+                  focusNode: _focus,
+                  style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                  decoration: InputDecoration(
+                    hintText: 'Escribí un mensaje...',
+                    hintStyle: const TextStyle(color: AppColors.textSecondary),
+                    filled: true,
+                    fillColor: AppColors.surfaceLight,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    isDense: true,
+                  ),
+                  onSubmitted: (_) => _send(),
+                  maxLines: null,
+                  keyboardType: TextInputType.multiline,
+                ),
+              ),
+              const SizedBox(width: 8),
+              AnimatedOpacity(
+                opacity: isSending ? 0.5 : 1.0,
+                duration: const Duration(milliseconds: 150),
+                child: IconButton(
+                  onPressed: isSending ? null : _send,
+                  icon: const Icon(Icons.send_rounded),
+                  color: AppColors.primary,
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

@@ -86,6 +86,13 @@ class ConversationService {
     return data.map((m) => Message.fromJson(m as Map<String, dynamic>)).toList();
   }
 
+  // invokeAgent: llama al agente secretario para generar una sugerencia de respuesta.
+  // El backend guarda el mensaje assistant en DB y devuelve {response, tokensUsed, latencyMs}.
+  static Future<String> invokeAgent(String conversationId) async {
+    final data = await ApiClient.post('/api/conversations/$conversationId/agent') as Map<String, dynamic>;
+    return data['response'] as String;
+  }
+
   static Future<Message> sendMessage({
     required String conversationId,
     required String role,
