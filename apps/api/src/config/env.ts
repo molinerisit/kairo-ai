@@ -14,6 +14,14 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32, 'JWT_SECRET debe tener al menos 32 caracteres'),
   JWT_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
+  // ANTHROPIC_API_KEY: requerida solo en producción, opcional en dev para no bloquear el arranque
+  ANTHROPIC_API_KEY: z.string().optional(),
+  // WHATSAPP_VERIFY_TOKEN: token secreto para verificar el webhook de WhatsApp
+  WHATSAPP_VERIFY_TOKEN: z.string().optional(),
+  // WHATSAPP_ACCESS_TOKEN: token de la WhatsApp Business API para enviar mensajes
+  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  // WHATSAPP_PHONE_NUMBER_ID: ID del número de WhatsApp registrado en Meta
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

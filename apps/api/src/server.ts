@@ -6,6 +6,7 @@ import authRoutes          from './modules/auth/auth.routes';
 import tablesRoutes        from './modules/tables/tables.routes';
 import conversationsRoutes from './modules/conversations/conversations.routes';
 import calendarRoutes      from './modules/calendar/calendar.routes';
+import agentsRoutes        from './modules/agents/agents.routes';
 import { authMiddleware } from './shared/middleware/auth.middleware';
 
 const app = express();
@@ -33,6 +34,7 @@ app.use('/api/auth',          authRoutes);
 app.use('/api/tables',       tablesRoutes);
 app.use('/api/conversations', conversationsRoutes);
 app.use('/api/calendar',     calendarRoutes);
+app.use('/api',             agentsRoutes);
 
 // ── Health check ────────────────────────────────���─────────────────
 // Endpoint simple para verificar que el servidor está corriendo.
