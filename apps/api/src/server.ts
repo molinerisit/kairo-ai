@@ -22,7 +22,7 @@ app.use(helmet());
 // En producción, reemplazar origin por el dominio real
 app.use(cors({
   origin: env.ALLOWED_ORIGIN ?? (env.NODE_ENV === 'production'
-    ? 'https://kairo-web.vercel.app'
+    ? 'https://kairo-web-ashen.vercel.app'
     : 'http://localhost:8080'),
   credentials: true,
 }));
