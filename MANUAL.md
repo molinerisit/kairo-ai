@@ -1026,4 +1026,149 @@ void dispose() {
 
 ---
 
+---
+
+### Issue #6 — Tabla dinámica: estructura backend
+
+**Branch:** `feature/KAI-06-tabla-backend`
+
+#### Endpoints implementados
+
+```
+Tablas:
+GET    /api/tables                      → listar tablas del tenant
+POST   /api/tables                      → crear tabla con columnas
+GET    /api/tables/:tableId             → obtener tabla
+PUT    /api/tables/:tableId/columns     → actualizar columnas
+DELETE /api/tables/:tableId             → eliminar tabla
+
+Filas:
+GET    /api/tables/:tableId/rows        → listar filas (con paginación)
+POST   /api/tables/:tableId/rows        → crear fila
+PUT    /api/tables/:tableId/rows/:rowId → actualizar fila (merge parcial)
+DELETE /api/tables/:tableId/rows/:rowId → eliminar fila
+```
+
+---
+
+#### Diseño de la tabla dinámica
+
+El reto de las tablas dinámicas es que cada negocio tiene columnas distintas. La solución con JSONB:
+
+```sql
+-- La definición de columnas vive en JSONB dentro de dynamic_tables
+columns JSONB → [{ "id": "uuid", "name": "Nombre", "type": "text", "required": true }]
+
+-- Los valores de cada fila también en JSONB
+data JSONB → { "col-uuid-1": "Juan Pérez", "col-uuid-2": "2026-05-01" }
+```
+
+Esto permite que cada tenant configure sus propias columnas sin modificar el schema de la base de datos.
+
+---
+
+#### JSONB merge con el operador `||`
+
+```sql
+-- Actualizar solo algunos campos de una fila sin perder los demás:
+UPDATE dynamic_rows
+SET data = data || '{"col-uuid-2": "nuevo valor"}'::jsonb
+WHERE id = $1
+```
+
+El operador `||` en PostgreSQL JSONB hace un **merge** (fusión) de dos objetos JSON:
+```
+{ "a": 1, "b": 2 } || { "b": 99, "c": 3 }
+= { "a": 1, "b": 99, "c": 3 }
+```
+
+Si el usuario solo cambia una celda en la tabla, mandamos solo ese campo. Sin merge, habría que mandar toda la fila completa cada vez.
+
+---
+
+#### Paginación
+
+```typescript
+// El cliente puede pedir: GET /api/tables/:id/rows?limit=50&offset=100
+const limit  = Math.min(parseInt(req.query.limit as string) || 100, 500);
+const offset = parseInt(req.query.offset as string) || 0;
+```
+
+- `limit`: cuántas filas devolver. Default 100, máximo 500 (evita queries que devuelven miles de registros).
+- `offset`: desde qué fila empezar. Para la página 2 con 100 por página: `offset=100`.
+
+Esto es paginación por offset (desplazamiento). Es simple y funciona bien para tablas pequeñas. Para tablas muy grandes se usaría cursor-based pagination, pero eso está fuera del alcance del MVP.
+
+---
+
+#### Validación de columnas requeridas
+
+```typescript
+function validateRequiredColumns(columns, data) {
+  const missing = columns
+    .filter(col => col.required && !data[col.id])
+    .map(col => col.name);
+
+  if (missing.length > 0) {
+    throw { statusCode: 400, message: `Campos requeridos: ${missing.join(', ')}` };
+  }
+}
+```
+
+La validación de requeridos se hace en el **service**, no en el schema de Zod. ¿Por qué? Porque no podemos saber en el schema qué columnas son requeridas — eso depende de la configuración del tenant en la base de datos, que no se conoce en tiempo de compilación.
+
+Regla general: **Zod valida la forma del dato (tipos, formatos). El service valida la lógica de negocio.**
+
+---
+
+#### router.use(authMiddleware) — aplicar a todas las rutas del módulo
+
+```typescript
+const router = Router();
+router.use(authMiddleware); // aplica a TODAS las rutas de este router
+
+router.get('/', listTablesController);
+router.post('/', createTableController);
+// ...
+```
+
+En vez de repetir `authMiddleware` en cada ruta, lo aplicamos una vez al router completo. Más limpio y más difícil de olvidar por error.
+
+---
+
+#### El problema de Express 5 con params tipados
+
+En Express 5, `req.params` está tipado como `Record<string, string | string[]>`. Esto es porque Express puede recibir parámetros repetidos en la URL. Para usar el valor como string limpio:
+
+```typescript
+const param = (req: Request, name: string): string => String(req.params[name]);
+
+// Uso:
+const tableId = param(req, 'tableId'); // siempre string
+```
+
+Este patrón evita el error de TypeScript `"string | string[]" is not assignable to "string"`.
+
+---
+
+#### Tabla completa de endpoints del backend hasta Sprint 1
+
+| Método | URL | Auth | Descripción |
+|---|---|---|---|
+| GET | /health | ❌ | Estado del servidor |
+| POST | /api/auth/register | ❌ | Crear cuenta |
+| POST | /api/auth/login | ❌ | Iniciar sesión |
+| GET | /api/me | ✅ | Datos del usuario actual |
+| GET | /api/tables | ✅ | Listar tablas del tenant |
+| POST | /api/tables | ✅ | Crear tabla |
+| GET | /api/tables/:id | ✅ | Obtener tabla |
+| PUT | /api/tables/:id/columns | ✅ | Actualizar columnas |
+| DELETE | /api/tables/:id | ✅ | Eliminar tabla |
+| GET | /api/tables/:id/rows | ✅ | Listar filas |
+| POST | /api/tables/:id/rows | ✅ | Crear fila |
+| PUT | /api/tables/:id/rows/:rowId | ✅ | Actualizar fila |
+| DELETE | /api/tables/:id/rows/:rowId | ✅ | Eliminar fila |
+
+---
+
 *Este manual fue generado al inicio del proyecto Kairo AI — Abril 2026.*
