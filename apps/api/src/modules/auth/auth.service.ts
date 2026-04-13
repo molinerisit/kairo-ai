@@ -17,6 +17,22 @@ function toSlug(name: string): string {
     .replace(/\s+/g, '-');                   // espacios → guiones
 }
 
+// uniqueSlug: genera un slug único verificando contra la DB.
+// Si "peluqueria-marta" ya existe, prueba "peluqueria-marta-2", "-3", etc.
+// La verificación corre dentro del client de la transacción para ser atómica.
+async function uniqueSlug(
+  client: { query: (text: string, params: unknown[]) => Promise<{ rows: unknown[] }> },
+  base: string
+): Promise<string> {
+  let candidate = base;
+  let counter   = 1;
+  while (true) {
+    const { rows } = await client.query('SELECT 1 FROM tenants WHERE slug = $1', [candidate]);
+    if (rows.length === 0) return candidate;
+    candidate = `${base}-${++counter}`;
+  }
+}
+
 // SALT_ROUNDS: cuántas veces bcrypt procesa el password.
 // 12 es el balance recomendado entre seguridad y velocidad.
 // Más alto = más seguro pero más lento (12 tarda ~250ms, que está bien).
@@ -49,7 +65,7 @@ export async function register(input: RegisterInput): Promise<AuthResponse> {
     await client.query('BEGIN');
 
     // 1. Crear el tenant (el negocio)
-    const slug = toSlug(input.business_name);
+    const slug = await uniqueSlug(client, toSlug(input.business_name));
     const tenantResult = await client.query<{ id: string }>(
       `INSERT INTO tenants (name, slug)
        VALUES ($1, $2)
