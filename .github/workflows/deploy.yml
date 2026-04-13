@@ -28,6 +28,9 @@ jobs:
           flutter build web --release \
             --dart-define=API_BASE_URL=${{ secrets.API_BASE_URL }}
 
+      - name: Copy vercel.json to build output
+        run: cp apps/web/vercel.json apps/web/build/web/vercel.json
+
       - name: Deploy to Vercel
         working-directory: apps/web/build/web
         run: |
