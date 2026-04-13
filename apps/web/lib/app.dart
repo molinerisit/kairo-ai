@@ -7,6 +7,7 @@ import 'features/dashboard/dashboard_shell.dart';
 import 'features/dashboard/dashboard_home.dart';
 import 'features/tables/table_screen.dart';
 import 'features/conversations/conversation_screen.dart';
+import 'features/calendar/calendar_screen.dart';
 import 'shared/theme/app_theme.dart';
 
 // _router se crea fuera de la clase para que no se reconstruya en cada rebuild.
@@ -49,7 +50,7 @@ GoRouter _buildRouter(AuthProvider auth) => GoRouter(
         ),
         GoRoute(
           path: '/dashboard/calendario',
-          builder: (context, state) => const _Placeholder(title: 'Calendario'),
+          builder: (context, state) => const CalendarScreen(),
         ),
         GoRoute(
           path: '/dashboard/conversaciones',
