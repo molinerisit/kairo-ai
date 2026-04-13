@@ -109,4 +109,18 @@ class ConversationService {
     );
     return Message.fromJson(data as Map<String, dynamic>);
   }
+
+  // simulate: envía un mensaje como si viniera de WhatsApp.
+  // El backend crea/reutiliza una conversación, llama al agente y devuelve
+  // el conversationId para que el frontend navegue a esa conversación.
+  static Future<String> simulate({
+    required String message,
+    String contactName = 'Cliente de prueba',
+  }) async {
+    final data = await ApiClient.post(
+      '/api/webhook/simulate',
+      body: {'message': message, 'contact_name': contactName},
+    ) as Map<String, dynamic>;
+    return data['conversationId'] as String;
+  }
 }

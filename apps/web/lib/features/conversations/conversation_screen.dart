@@ -80,6 +80,12 @@ class _ConversationList extends StatelessWidget {
               ),
               const Spacer(),
               IconButton(
+                icon: const Icon(Icons.science_outlined, size: 20),
+                color: AppColors.textSecondary,
+                tooltip: 'Simular mensaje de WhatsApp',
+                onPressed: () => _showSimulateDialog(context, provider),
+              ),
+              IconButton(
                 icon: const Icon(Icons.add_comment_outlined, size: 20),
                 color: AppColors.textSecondary,
                 tooltip: 'Nueva conversación',
@@ -142,6 +148,21 @@ class _ConversationList extends StatelessWidget {
           contactPhone: phone,
           contactName: name,
         ),
+      ),
+    );
+  }
+
+  void _showSimulateDialog(BuildContext context, ConversationProvider provider) {
+    showDialog(
+      context: context,
+      builder: (ctx) => _SimulateDialog(
+        onSent: (conversationId) async {
+          await provider.loadConversations();
+          final conv = provider.conversations
+              .where((c) => c.id == conversationId)
+              .firstOrNull;
+          if (conv != null) provider.selectConversation(conv);
+        },
       ),
     );
   }
@@ -716,6 +737,129 @@ class _NewConversationDialogState extends State<_NewConversationDialog> {
           },
           style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
           child: const Text('Crear'),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Simulador de WhatsApp ─────────────────────────────────────────────────────
+
+class _SimulateDialog extends StatefulWidget {
+  final Future<void> Function(String conversationId) onSent;
+  const _SimulateDialog({required this.onSent});
+
+  @override
+  State<_SimulateDialog> createState() => _SimulateDialogState();
+}
+
+class _SimulateDialogState extends State<_SimulateDialog> {
+  final _messageCtrl = TextEditingController();
+  final _nameCtrl    = TextEditingController(text: 'Cliente de prueba');
+  bool    _loading   = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _messageCtrl.dispose();
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final msg = _messageCtrl.text.trim();
+    if (msg.isEmpty) return;
+
+    setState(() { _loading = true; _error = null; });
+    try {
+      final convId = await ConversationService.simulate(
+        message:     msg,
+        contactName: _nameCtrl.text.trim().isEmpty ? 'Cliente de prueba' : _nameCtrl.text.trim(),
+      );
+      if (!mounted) return;
+      Navigator.pop(context);
+      await widget.onSent(convId);
+    } catch (e) {
+      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.surface,
+      title: Row(
+        children: [
+          Icon(Icons.science_outlined, color: AppColors.primary, size: 20),
+          const SizedBox(width: 10),
+          const Text('Simular mensaje de WhatsApp',
+              style: TextStyle(fontSize: 16, color: AppColors.textPrimary)),
+        ],
+      ),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Simulá un mensaje entrante para probar el agente sin necesitar un número de WhatsApp real.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.5),
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: _nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Nombre del contacto',
+                prefixIcon: Icon(Icons.person_outline, size: 18),
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _messageCtrl,
+              maxLines: 3,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Mensaje del cliente',
+                hintText: 'Ej: Hola, quisiera saber el precio de un corte de pelo',
+                alignLabelWithHint: true,
+              ),
+              onSubmitted: (_) => _send(),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.danger.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                ),
+                child: Text(_error!,
+                    style: const TextStyle(color: AppColors.danger, fontSize: 12)),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _loading ? null : () => Navigator.pop(context),
+          child: const Text('Cancelar',
+              style: TextStyle(color: AppColors.textSecondary)),
+        ),
+        FilledButton.icon(
+          onPressed: _loading ? null : _send,
+          style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+          icon: _loading
+              ? const SizedBox(
+                  width: 14, height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Icon(Icons.send_outlined, size: 16),
+          label: Text(_loading ? 'Enviando...' : 'Enviar'),
         ),
       ],
     );
