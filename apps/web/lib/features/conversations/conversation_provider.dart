@@ -10,6 +10,8 @@ class ConversationProvider extends ChangeNotifier {
   bool    _isLoadingList     = false;
   bool    _isLoadingMessages = false;
   bool    _isSending         = false;
+  bool    _isInvokingAgent   = false;
+  String? _agentSuggestion;
   String? _error;
 
   Timer? _pollTimer;
@@ -20,6 +22,8 @@ class ConversationProvider extends ChangeNotifier {
   bool               get isLoadingList       => _isLoadingList;
   bool               get isLoadingMessages   => _isLoadingMessages;
   bool               get isSending           => _isSending;
+  bool               get isInvokingAgent     => _isInvokingAgent;
+  String?            get agentSuggestion     => _agentSuggestion;
   String?            get error               => _error;
 
   // startPolling: inicia un timer que refresca conversaciones y mensajes cada 10s.
@@ -118,6 +122,31 @@ class ConversationProvider extends ChangeNotifier {
       _isSending = false;
       notifyListeners();
     }
+  }
+
+  // invokeAgent: pide al secretario que genere una respuesta y la guarda como sugerencia.
+  // El backend ya la guardó en la DB como mensaje assistant.
+  Future<void> invokeAgent() async {
+    if (_selected == null) return;
+    _isInvokingAgent = true;
+    _agentSuggestion = null;
+    _error = null;
+    notifyListeners();
+    try {
+      _agentSuggestion = await ConversationService.invokeAgent(_selected!.id);
+      // Recargar mensajes para mostrar el mensaje assistant que el backend guardó
+      _messages = await ConversationService.listMessages(_selected!.id);
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      _isInvokingAgent = false;
+      notifyListeners();
+    }
+  }
+
+  void clearAgentSuggestion() {
+    _agentSuggestion = null;
+    notifyListeners();
   }
 
   Future<void> createConversation({
