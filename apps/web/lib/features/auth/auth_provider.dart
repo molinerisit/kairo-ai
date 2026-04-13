@@ -8,15 +8,22 @@ import 'auth_service.dart';
 // El estado es cualquier dato que, cuando cambia, debe redibujar la UI.
 // En este caso: si el usuario está logueado o no.
 class AuthProvider extends ChangeNotifier {
-  bool _isLoggedIn = false;
-  bool _isLoading  = false;
+  bool _isLoggedIn      = false;
+  bool _isLoading       = false;
+  bool _justRegistered  = false;
   String? _error;
   String? _userEmail;
 
-  bool    get isLoggedIn => _isLoggedIn;
-  bool    get isLoading  => _isLoading;
-  String? get error      => _error;
-  String? get userEmail  => _userEmail;
+  bool    get isLoggedIn     => _isLoggedIn;
+  bool    get isLoading      => _isLoading;
+  bool    get justRegistered => _justRegistered;
+  String? get error          => _error;
+  String? get userEmail      => _userEmail;
+
+  void clearJustRegistered() {
+    _justRegistered = false;
+    notifyListeners();
+  }
 
   // checkSession: verifica si hay sesión activa.
   // Si el access token vencido pero hay refresh token válido, renueva automáticamente.
@@ -59,8 +66,9 @@ class AuthProvider extends ChangeNotifier {
         password: password,
         businessName: businessName,
       );
-      _isLoggedIn = true;
-      _userEmail  = await AuthService.getUserEmail();
+      _isLoggedIn     = true;
+      _justRegistered = true;
+      _userEmail      = await AuthService.getUserEmail();
     } catch (e) {
       _error = e.toString().replaceFirst('Exception: ', '');
       _isLoggedIn = false;
