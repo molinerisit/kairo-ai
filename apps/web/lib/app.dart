@@ -5,6 +5,7 @@ import 'features/auth/auth_provider.dart';
 import 'features/auth/login_screen.dart';
 import 'features/dashboard/dashboard_shell.dart';
 import 'features/dashboard/dashboard_home.dart';
+import 'features/tables/table_screen.dart';
 import 'shared/theme/app_theme.dart';
 
 // _router se crea fuera de la clase para que no se reconstruya en cada rebuild.
@@ -43,7 +44,7 @@ GoRouter _buildRouter(AuthProvider auth) => GoRouter(
         ),
         GoRoute(
           path: '/dashboard/tabla',
-          builder: (context, state) => const _Placeholder(title: 'Tabla'),
+          builder: (context, state) => const TableScreen(),
         ),
         GoRoute(
           path: '/dashboard/calendario',
