@@ -10,6 +10,7 @@ import agentsRoutes        from './modules/agents/agents.routes';
 import webhookRoutes       from './modules/webhook/webhook.routes';
 import { statsController } from './modules/stats/stats.controller';
 import businessProfileRoutes from './modules/business-profile/business-profile.routes';
+import evolutionRoutes       from './modules/evolution/evolution.routes';
 import { authMiddleware } from './shared/middleware/auth.middleware';
 
 const app = express();
@@ -41,6 +42,7 @@ app.use('/api/conversations', agentsRoutes);
 app.use('/api/webhook',      webhookRoutes);
 app.get('/api/stats',        authMiddleware, statsController);
 app.use('/api/business-profile', businessProfileRoutes);
+app.use('/api/evolution',        evolutionRoutes);
 
 // ── Health check ────────────────────────────────���─────────────────
 // Endpoint simple para verificar que el servidor está corriendo.

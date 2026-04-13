@@ -22,6 +22,10 @@ const envSchema = z.object({
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
   // WHATSAPP_PHONE_NUMBER_ID: ID del número de WhatsApp registrado en Meta
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  // EVOLUTION_API_URL: URL del servidor Evolution API (ej: https://evolution.up.railway.app)
+  EVOLUTION_API_URL: z.string().optional(),
+  // EVOLUTION_API_KEY: API key del servidor Evolution API (AUTHENTICATION_API_KEY)
+  EVOLUTION_API_KEY: z.string().optional(),
   // ALLOWED_ORIGIN: dominio del frontend autorizado para CORS
   // En dev: http://localhost:8080 | En prod: URL de Vercel
   ALLOWED_ORIGIN: z.string().optional(),
