@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { env } from './config/env';
 import authRoutes from './modules/auth/auth.routes';
+import { authMiddleware } from './shared/middleware/auth.middleware';
 
 const app = express();
 
@@ -32,6 +33,14 @@ app.use('/api/auth', authRoutes);
 // Usado por CI/CD y servicios de monitoreo.
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', env: env.NODE_ENV, timestamp: new Date().toISOString() });
+});
+
+// ── Endpoint protegido de prueba ──────────────────────────────────
+// Verifica que el middleware funciona correctamente.
+// GET /api/me con un JWT válido → devuelve los datos del usuario.
+// GET /api/me sin token         → 401.
+app.get('/api/me', authMiddleware, (req, res) => {
+  res.json({ user: req.user });
 });
 
 // ── Arrancar servidor ─────────────────────────────────────────────
