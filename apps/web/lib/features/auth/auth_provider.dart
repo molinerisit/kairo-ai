@@ -48,6 +48,28 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> register(String email, String password, String businessName) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await AuthService.register(
+        email: email,
+        password: password,
+        businessName: businessName,
+      );
+      _isLoggedIn = true;
+      _userEmail  = await AuthService.getUserEmail();
+    } catch (e) {
+      _error = e.toString().replaceFirst('Exception: ', '');
+      _isLoggedIn = false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> logout() async {
     await AuthService.logout();
     _isLoggedIn = false;

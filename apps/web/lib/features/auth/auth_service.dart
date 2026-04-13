@@ -9,6 +9,36 @@ const String _refreshKey    = 'refresh_token';
 const String _emailKey      = 'user_email';
 
 class AuthService {
+  // register: llama a POST /api/auth/register, crea el tenant y hace login automático.
+  static Future<void> register({
+    required String email,
+    required String password,
+    required String businessName,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$_apiBase/api/auth/register'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'email': email,
+        'password': password,
+        'business_name': businessName,
+      }),
+    );
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+
+    if (response.statusCode == 201) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_accessKey,  body['access_token']  as String);
+      await prefs.setString(_refreshKey, body['refresh_token'] as String);
+      final user = body['user'] as Map<String, dynamic>?;
+      if (user != null) await prefs.setString(_emailKey, user['email'] as String? ?? '');
+      return;
+    }
+
+    throw Exception(body['error'] ?? 'Error al registrarse');
+  }
+
   // login: llama a POST /api/auth/login y persiste ambos tokens.
   static Future<void> login({
     required String email,

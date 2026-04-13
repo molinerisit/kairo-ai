@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'features/auth/auth_provider.dart';
 import 'features/auth/login_screen.dart';
+import 'features/auth/signup_screen.dart';
 import 'features/dashboard/dashboard_shell.dart';
 import 'features/dashboard/dashboard_home.dart';
 import 'features/tables/table_screen.dart';
@@ -20,13 +21,14 @@ GoRouter _buildRouter(AuthProvider auth) => GoRouter(
   refreshListenable: auth, // escucha cambios en el estado de auth
   redirect: (context, state) {
     final loggedIn   = auth.isLoggedIn;
-    final goingLogin = state.uri.path == '/login';
+    final path       = state.uri.path;
+    final isAuthPage = path == '/login' || path == '/register';
 
-    // Si no está logueado y no va a /login → redirigir a /login
-    if (!loggedIn && !goingLogin) return '/login';
+    // Si no está logueado y no va a una página de auth → redirigir a /login
+    if (!loggedIn && !isAuthPage) return '/login';
 
-    // Si ya está logueado y va a /login → redirigir al dashboard
-    if (loggedIn && goingLogin)  return '/dashboard';
+    // Si ya está logueado y va a login/register → redirigir al dashboard
+    if (loggedIn && isAuthPage) return '/dashboard';
 
     return null; // no redirigir
   },
@@ -34,6 +36,10 @@ GoRouter _buildRouter(AuthProvider auth) => GoRouter(
     GoRoute(
       path: '/login',
       builder: (context, state) => const LoginScreen(),
+    ),
+    GoRoute(
+      path: '/register',
+      builder: (context, state) => const SignupScreen(),
     ),
 
     // ShellRoute: mantiene el DashboardShell (sidebar) mientras
