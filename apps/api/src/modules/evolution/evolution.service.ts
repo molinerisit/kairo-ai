@@ -42,11 +42,11 @@ export async function connectWhatsApp(tenantId: string): Promise<{ qr: string }>
     [tenantId]
   );
 
-  // Obtener QR
-  const qrData = await evo.getQr(slug);
-  if (!qrData) throw new Error('No se pudo obtener el QR. Intentá de nuevo.');
+  // Obtener QR — Evolution lo genera de forma asíncrona, hay que reintentar
+  const qr = await pollForQr(slug);
+  if (!qr) throw new Error('No se pudo obtener el QR. Intentá de nuevo en unos segundos.');
 
-  return { qr: qrData.code };
+  return { qr };
 }
 
 // getConnectionStatus: devuelve el estado actual de la instancia.
@@ -121,6 +121,17 @@ export async function onDisconnected(slug: string): Promise<void> {
      WHERE tenant_id = (SELECT id FROM tenants WHERE slug = $1)`,
     [slug]
   );
+}
+
+// pollForQr: reintenta obtener el QR hasta 10 veces con 1s de pausa entre intentos.
+// Evolution API genera el QR de forma asíncrona después de crear/reconectar la instancia.
+async function pollForQr(slug: string): Promise<string | null> {
+  for (let i = 0; i < 10; i++) {
+    const qrData = await evo.getQr(slug);
+    if (qrData?.code) return qrData.code;
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  return null;
 }
 
 // getTenantIdBySlug: usado por el webhook para rutear mensajes al tenant correcto.
