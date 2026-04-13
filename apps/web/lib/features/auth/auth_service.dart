@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../shared/config/app_config.dart';
 
-const String _apiBase       = 'http://localhost:3000';
+const String _apiBase = kApiBase;
 const String _accessKey     = 'access_token';
 const String _refreshKey    = 'refresh_token';
 const String _emailKey      = 'user_email';

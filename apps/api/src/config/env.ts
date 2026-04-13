@@ -22,6 +22,9 @@ const envSchema = z.object({
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
   // WHATSAPP_PHONE_NUMBER_ID: ID del número de WhatsApp registrado en Meta
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  // ALLOWED_ORIGIN: dominio del frontend autorizado para CORS
+  // En dev: http://localhost:8080 | En prod: URL de Vercel
+  ALLOWED_ORIGIN: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
