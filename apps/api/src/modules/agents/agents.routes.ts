@@ -6,8 +6,7 @@ const router = Router();
 router.use(authMiddleware);
 
 // POST /api/conversations/:conversationId/agent
-// Envía un mensaje del usuario al agente secretario y devuelve la respuesta IA.
-// El mensaje se guarda en messages con role='user', la respuesta con role='assistant'.
-router.post('/conversations/:conversationId/agent', invokeAgentController);
+// Montado en server.ts bajo /api/conversations, así que el path aquí es solo /:id/agent
+router.post('/:conversationId/agent', invokeAgentController);
 
 export default router;
