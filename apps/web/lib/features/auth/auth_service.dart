@@ -2,16 +2,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-// URL base de la API — en desarrollo apunta al backend local.
-// En producción se reemplaza por la URL real del servidor.
-const String _apiBase = 'http://localhost:3000';
-
-// Clave usada para guardar el JWT en SharedPreferences (localStorage en web).
-const String _tokenKey = 'access_token';
+const String _apiBase       = 'http://localhost:3000';
+const String _accessKey     = 'access_token';
+const String _refreshKey    = 'refresh_token';
 
 class AuthService {
-  // login: llama a POST /api/auth/login y guarda el JWT localmente.
-  // Devuelve true si fue exitoso, lanza una excepción con el mensaje si falla.
+  // login: llama a POST /api/auth/login y persiste ambos tokens.
   static Future<void> login({
     required String email,
     required String password,
@@ -25,31 +21,73 @@ class AuthService {
     final body = jsonDecode(response.body) as Map<String, dynamic>;
 
     if (response.statusCode == 200) {
-      // Guardamos el token en SharedPreferences.
-      // En Flutter Web, SharedPreferences usa localStorage del navegador.
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_tokenKey, body['access_token'] as String);
+      await prefs.setString(_accessKey,  body['access_token']  as String);
+      await prefs.setString(_refreshKey, body['refresh_token'] as String);
       return;
     }
 
-    // Lanzamos el mensaje de error del servidor para mostrarlo en la UI
     throw Exception(body['error'] ?? 'Error al iniciar sesión');
   }
 
-  // logout: elimina el token guardado localmente.
+  // logout: llama al endpoint del servidor para revocar los refresh tokens,
+  // luego limpia el storage local.
   static Future<void> logout() async {
+    final token = await getToken();
+    if (token != null) {
+      // Intentamos revocar en el servidor (best-effort — si falla igual limpiamos local)
+      try {
+        await http.post(
+          Uri.parse('$_apiBase/api/auth/logout'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        );
+      } catch (_) {
+        // Si no se puede contactar al servidor, igual hacemos logout local
+      }
+    }
+
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
+    await prefs.remove(_accessKey);
+    await prefs.remove(_refreshKey);
   }
 
-  // getToken: devuelve el JWT guardado, o null si no hay sesión.
+  // getToken: devuelve el access token guardado, o null si no hay sesión.
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_tokenKey);
+    return prefs.getString(_accessKey);
   }
 
-  // isLoggedIn: true si hay un token guardado.
-  // No verifica que el token sea válido — eso lo hace el servidor.
+  // refreshToken: intenta renovar el access token usando el refresh token.
+  // Si falla (refresh vencido), devuelve false → hay que re-loguearse.
+  static Future<bool> refreshToken() async {
+    final prefs        = await SharedPreferences.getInstance();
+    final refreshToken = prefs.getString(_refreshKey);
+
+    if (refreshToken == null) return false;
+
+    final response = await http.post(
+      Uri.parse('$_apiBase/api/auth/refresh'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'refresh_token': refreshToken}),
+    );
+
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      await prefs.setString(_accessKey,  body['access_token']  as String);
+      await prefs.setString(_refreshKey, body['refresh_token'] as String);
+      return true;
+    }
+
+    // Refresh inválido o vencido → limpiar y forzar re-login
+    await prefs.remove(_accessKey);
+    await prefs.remove(_refreshKey);
+    return false;
+  }
+
+  // isLoggedIn: true si hay tokens guardados.
   static Future<bool> isLoggedIn() async {
     final token = await getToken();
     return token != null;
