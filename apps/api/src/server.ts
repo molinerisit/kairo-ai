@@ -8,6 +8,7 @@ import conversationsRoutes from './modules/conversations/conversations.routes';
 import calendarRoutes      from './modules/calendar/calendar.routes';
 import agentsRoutes        from './modules/agents/agents.routes';
 import webhookRoutes       from './modules/webhook/webhook.routes';
+import { statsController } from './modules/stats/stats.controller';
 import { authMiddleware } from './shared/middleware/auth.middleware';
 
 const app = express();
@@ -37,6 +38,7 @@ app.use('/api/conversations', conversationsRoutes);
 app.use('/api/calendar',     calendarRoutes);
 app.use('/api/conversations', agentsRoutes);
 app.use('/api/webhook',      webhookRoutes);
+app.get('/api/stats',        authMiddleware, statsController);
 
 // ── Health check ────────────────────────────────���─────────────────
 // Endpoint simple para verificar que el servidor está corriendo.
