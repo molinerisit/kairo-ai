@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../../features/auth/auth_service.dart';
+import '../config/app_config.dart';
 
 // ApiClient — cliente HTTP centralizado.
 //
@@ -16,7 +17,9 @@ import '../../../features/auth/auth_service.dart';
 // Si el refresh también falla, limpia la sesión y lanza una excepción
 // que el AuthProvider puede capturar para redirigir al login.
 
-const String apiBase = 'http://localhost:3000';
+// apiBase se inyecta en build con --dart-define=API_BASE_URL
+// Ver: lib/shared/config/app_config.dart
+const String apiBase = kApiBase;
 
 class ApiClient {
   // _headers: construye los headers con el token de autenticación.

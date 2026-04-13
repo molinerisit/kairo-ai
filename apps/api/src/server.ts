@@ -21,9 +21,9 @@ app.use(helmet());
 // cors: permite que el frontend (Flutter Web) llame a esta API
 // En producción, reemplazar origin por el dominio real
 app.use(cors({
-  origin: env.NODE_ENV === 'production'
-    ? 'https://app.kairoai.com'
-    : 'http://localhost:8080',
+  origin: env.ALLOWED_ORIGIN ?? (env.NODE_ENV === 'production'
+    ? 'https://kairo-web.vercel.app'
+    : 'http://localhost:8080'),
   credentials: true,
 }));
 
