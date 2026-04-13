@@ -5,6 +5,7 @@ import { env } from './config/env';
 import authRoutes          from './modules/auth/auth.routes';
 import tablesRoutes        from './modules/tables/tables.routes';
 import conversationsRoutes from './modules/conversations/conversations.routes';
+import calendarRoutes      from './modules/calendar/calendar.routes';
 import { authMiddleware } from './shared/middleware/auth.middleware';
 
 const app = express();
@@ -31,6 +32,7 @@ app.use(express.json());
 app.use('/api/auth',          authRoutes);
 app.use('/api/tables',       tablesRoutes);
 app.use('/api/conversations', conversationsRoutes);
+app.use('/api/calendar',     calendarRoutes);
 
 // ── Health check ────────────────────────────────���─────────────────
 // Endpoint simple para verificar que el servidor está corriendo.
