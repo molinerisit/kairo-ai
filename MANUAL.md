@@ -702,4 +702,172 @@ El frontend puede mostrar cada error al lado del campo correspondiente.
 
 ---
 
+---
+
+### Issue #4 — Middleware de autenticación y tenant
+
+**Branch:** `feature/KAI-04-auth-middleware`
+
+#### Archivos creados
+
+```
+src/types/
+└── express.d.ts                        ← Extiende el tipo Request de Express
+
+src/shared/middleware/
+└── auth.middleware.ts                  ← authMiddleware + requireRole
+```
+
+---
+
+#### Qué es un middleware en Express
+
+Un middleware es una función que se ejecuta **entre** que llega el request y que llega al controller final. Express encadena middlewares en orden, y cada uno puede:
+- Modificar el request (`req`)
+- Modificar la response (`res`)
+- Llamar a `next()` para pasar al siguiente
+- Cortar la cadena devolviendo una respuesta (ej: 401)
+
+```
+Request
+  → helmet()          ← agrega headers de seguridad
+  → cors()            ← verifica el origen del request
+  → express.json()    ← parsea el body como JSON
+  → authMiddleware    ← verifica el JWT
+  → controller        ← lógica de negocio
+  → Response
+```
+
+**Regla:** si un middleware no llama a `next()` ni devuelve una respuesta, el request queda colgado. Siempre hay que hacer una de las dos.
+
+---
+
+#### Declaration merging — extender tipos de librerías externas
+
+Express define el tipo `Request` con sus propias propiedades. Para agregar `req.user` sin que TypeScript se queje, usamos **declaration merging**:
+
+```typescript
+// src/types/express.d.ts
+declare global {
+  namespace Express {
+    interface Request {
+      user?: {
+        user_id: string;
+        tenant_id: string;
+        role: string;
+      };
+    }
+  }
+}
+export {};
+```
+
+TypeScript fusiona esta definición con la original de Express. Ahora `req.user` existe en todo el proyecto como si fuera parte de Express.
+
+El `export {}` al final no hace nada visible, pero le dice a TypeScript que este archivo es un módulo ES, necesario para que el `declare global` funcione correctamente.
+
+---
+
+#### Cómo funciona el middleware de auth
+
+```typescript
+export function authMiddleware(req, res, next) {
+  // 1. Leer el header Authorization
+  const authHeader = req.headers.authorization;
+  // formato esperado: "Bearer eyJhbGci..."
+
+  // 2. Verificar formato
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Token no proporcionado' });
+    return; // cortamos la cadena, no llamamos next()
+  }
+
+  // 3. Extraer el token (sin la palabra "Bearer ")
+  const token = authHeader.slice(7);
+
+  try {
+    // 4. Verificar firma y expiración
+    const payload = verifyToken(token);
+
+    // 5. Adjuntar contexto al request para que el controller lo use
+    req.user = { user_id, tenant_id, role };
+
+    next(); // todo ok, continuar
+  } catch {
+    res.status(401).json({ error: 'Token inválido o vencido' });
+  }
+}
+```
+
+**Por qué no exponemos el detalle del error del JWT:**
+`jwt.verify` puede fallar por muchas razones: token vencido, firma inválida, token malformado. Si devolviéramos el error exacto (`"jwt expired"`, `"invalid signature"`), le estaríamos dando información a un posible atacante sobre qué está fallando. Siempre devolvemos el mismo mensaje genérico.
+
+---
+
+#### requireRole — middleware factory
+
+Un **middleware factory** es una función que *devuelve* un middleware. Sirve para middlewares que necesitan configuración:
+
+```typescript
+// Definición
+export function requireRole(...roles: string[]) {
+  return (req, res, next) => {      // ← devuelve el middleware
+    if (!req.user || !roles.includes(req.user.role)) {
+      res.status(403).json({ error: 'Sin permisos' });
+      return;
+    }
+    next();
+  };
+}
+
+// Uso en una ruta
+router.delete('/negocio/:id',
+  authMiddleware,                    // primero: ¿está autenticado?
+  requireRole('owner', 'superadmin'), // segundo: ¿tiene el rol?
+  deleteBusinessController           // tercero: lógica de negocio
+);
+```
+
+**401 vs 403:**
+- **401 Unauthorized** — no está autenticado (no hay token o es inválido)
+- **403 Forbidden** — está autenticado pero no tiene permiso para esta acción
+
+---
+
+#### Cómo usar el middleware en rutas futuras
+
+```typescript
+// Ruta pública — sin middleware
+router.post('/auth/register', registerController);
+router.post('/auth/login', loginController);
+
+// Ruta protegida — cualquier usuario autenticado
+router.get('/conversaciones', authMiddleware, listConversationsController);
+
+// Ruta protegida por rol
+router.delete('/tenant', authMiddleware, requireRole('owner'), deleteTenantController);
+
+// En el controller, req.user ya está disponible y tipado
+export async function listConversationsController(req, res) {
+  const { tenant_id } = req.user!; // el ! dice "sé que no es undefined"
+  const conversations = await getByTenant(tenant_id);
+  res.json(conversations);
+}
+```
+
+---
+
+#### Tabla de endpoints y su protección
+
+| Método | URL | Auth | Roles |
+|---|---|---|---|
+| GET | /health | ❌ público | — |
+| POST | /api/auth/register | ❌ público | — |
+| POST | /api/auth/login | ❌ público | — |
+| GET | /api/me | ✅ authMiddleware | cualquiera |
+| (próximos) | /api/tables/* | ✅ authMiddleware | owner, operator |
+| (próximos) | /api/admin/* | ✅ authMiddleware | superadmin |
+
+---
+
 *Este manual fue generado al inicio del proyecto Kairo AI — Abril 2026.*
