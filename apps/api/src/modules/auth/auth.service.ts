@@ -5,7 +5,7 @@ import { createRefreshToken } from './auth.refresh.service';
 import type { RegisterInput } from './auth.schema';
 import type { AuthResponse } from './auth.types';
 
-// Convierte el nombre del negocio en un slug amigable para URLs.
+// toSlug: convierte el nombre del negocio en un slug amigable para URLs.
 // "Peluquería Marta & Co." → "peluqueria-marta-co"
 function toSlug(name: string): string {
   return name
@@ -15,6 +15,27 @@ function toSlug(name: string): string {
     .replace(/[^a-z0-9\s]/g, '')            // elimina caracteres especiales
     .trim()
     .replace(/\s+/g, '-');                   // espacios → guiones
+}
+
+// uniqueSlug: genera un slug único verificando contra la DB.
+// Si "peluqueria-marta" ya existe, prueba "peluqueria-marta-2", "-3", etc.
+// Usa el client de la transacción para que la verificación sea atómica.
+async function uniqueSlug(
+  client: { query: (text: string, params: unknown[]) => Promise<{ rows: unknown[] }> },
+  base: string
+): Promise<string> {
+  let candidate = base;
+  let counter   = 1;
+
+  while (true) {
+    const { rows } = await client.query(
+      'SELECT 1 FROM tenants WHERE slug = $1',
+      [candidate]
+    );
+    if (rows.length === 0) return candidate;   // libre → lo usamos
+    counter++;
+    candidate = `${base}-${counter}`;
+  }
 }
 
 // SALT_ROUNDS: cuántas veces bcrypt procesa el password.
@@ -49,7 +70,7 @@ export async function register(input: RegisterInput): Promise<AuthResponse> {
     await client.query('BEGIN');
 
     // 1. Crear el tenant (el negocio)
-    const slug = toSlug(input.business_name);
+    const slug = await uniqueSlug(client, toSlug(input.business_name));
     const tenantResult = await client.query<{ id: string }>(
       `INSERT INTO tenants (name, slug)
        VALUES ($1, $2)
