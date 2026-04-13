@@ -431,191 +431,116 @@ class _WhatsAppSection extends StatefulWidget {
 }
 
 class _WhatsAppSectionState extends State<_WhatsAppSection> {
-  // Estado local: se carga desde /api/evolution/status al iniciar
-  String  _status  = 'disconnected'; // 'disconnected' | 'connecting' | 'connected'
-  String? _phone;
-  String? _qrBase64;
-  bool    _loading = false;
+  late final TextEditingController _phoneIdCtrl;
+  bool    _saving = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _loadStatus();
+    _phoneIdCtrl = TextEditingController(text: widget.profile.whatsapp ?? '');
   }
 
-  Future<void> _loadStatus() async {
-    setState(() { _loading = true; _error = null; });
-    try {
-      final data = await ApiClient.get('/api/evolution/status') as Map<String, dynamic>;
-      setState(() {
-        _status = data['status'] as String? ?? 'disconnected';
-        _phone  = data['phone'] as String?;
-      });
-    } catch (_) {
-      // Si Evolution API no está configurado todavía, mostramos el estado por defecto
-    } finally {
-      setState(() => _loading = false);
-    }
+  @override
+  void dispose() {
+    _phoneIdCtrl.dispose();
+    super.dispose();
   }
 
-  Future<void> _connect() async {
-    setState(() { _loading = true; _error = null; _qrBase64 = null; });
+  Future<void> _save() async {
+    setState(() { _saving = true; _error = null; });
     try {
-      final data = await ApiClient.post('/api/evolution/connect') as Map<String, dynamic>;
-      setState(() {
-        _status   = 'connecting';
-        _qrBase64 = (data['qr'] as String?)?.replaceFirst('data:image/png;base64,', '');
-      });
-    } catch (e) {
-      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
-    } finally {
-      setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _disconnect() async {
-    setState(() { _loading = true; _error = null; });
-    try {
-      await ApiClient.delete('/api/evolution/disconnect');
-      setState(() { _status = 'disconnected'; _phone = null; _qrBase64 = null; });
+      await SettingsService.updateProfile({'whatsapp': _phoneIdCtrl.text.trim()});
       widget.onSaved();
     } catch (e) {
       setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
-      setState(() => _loading = false);
+      setState(() => _saving = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final connected = (widget.profile.whatsapp ?? '').isNotEmpty;
     return _SectionCard(
-      title:    'WhatsApp',
-      subtitle: 'Vinculá tu número para recibir y responder mensajes',
+      title:    'WhatsApp Business',
+      subtitle: 'Conectá tu número mediante Meta Cloud API',
       icon:     Icons.chat_outlined,
+      onSave:   _save,
+      saving:   _saving,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Estado ──────────────────────────────────────────────
-          _StatusChip(status: _status, phone: _phone),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: (connected ? AppColors.success : AppColors.textSecondary).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: (connected ? AppColors.success : AppColors.textSecondary).withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  connected ? Icons.check_circle_outline : Icons.phone_disabled_outlined,
+                  size: 14,
+                  color: connected ? AppColors.success : AppColors.textSecondary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  connected ? 'Configurado' : 'Sin configurar',
+                  style: TextStyle(
+                    color: connected ? AppColors.success : AppColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 20),
 
-          // ── QR Code ─────────────────────────────────────────────
-          if (_status == 'connecting' && _qrBase64 != null) ...[
-            const Text(
-              'Escaneá este código con WhatsApp en tu teléfono:',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            Center(
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Image.memory(
-                  Uri.parse('data:image/png;base64,$_qrBase64').data!.contentAsBytes(),
-                  width:  200,
-                  height: 200,
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Center(
-              child: TextButton.icon(
-                onPressed: _loading ? null : _connect,
-                icon: const Icon(Icons.refresh, size: 15),
-                label: const Text('Regenerar QR'),
-                style: TextButton.styleFrom(foregroundColor: AppColors.textSecondary),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
+          // ── Campo Phone Number ID ────────────────────────────────
+          _Field(
+            controller: _phoneIdCtrl,
+            label: 'Phone Number ID',
+            hint:  'ej: 123456789012345',
+          ),
+          const SizedBox(height: 12),
 
           // ── Instrucciones ────────────────────────────────────────
-          if (_status == 'disconnected') ...[
-            const Text(
-              'Abrí WhatsApp en tu teléfono → Dispositivos vinculados → Vincular un dispositivo → escaneá el QR.',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.5),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
             ),
-            const SizedBox(height: 16),
-          ],
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Cómo obtener el Phone Number ID:',
+                    style: TextStyle(color: AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w600)),
+                SizedBox(height: 6),
+                Text(
+                  '1. Abrí Meta for Developers → Tu app\n'
+                  '2. WhatsApp → Configuración de API\n'
+                  '3. Copiá el "ID de número de teléfono"\n'
+                  '4. Configurá el webhook con la URL de tu kairo y el verify token',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.6),
+                ),
+              ],
+            ),
+          ),
 
           // ── Error ────────────────────────────────────────────────
           if (_error != null) ...[
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.danger.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
-              ),
-              child: Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 12)),
-            ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+            Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 12)),
           ],
-
-          // ── Botones ──────────────────────────────────────────────
-          Row(
-            children: [
-              if (_status != 'connected')
-                ElevatedButton.icon(
-                  onPressed: _loading ? null : _connect,
-                  icon: _loading
-                      ? const SizedBox(width: 14, height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.qr_code_2, size: 16),
-                  label: Text(_status == 'connecting' ? 'Ver QR' : 'Conectar WhatsApp'),
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366)),
-                ),
-              if (_status == 'connected') ...[
-                const Icon(Icons.check_circle, color: AppColors.success, size: 16),
-                const SizedBox(width: 6),
-                const Text('Conectado', style: TextStyle(color: AppColors.success)),
-                const Spacer(),
-                TextButton(
-                  onPressed: _loading ? null : _disconnect,
-                  child: const Text('Desconectar',
-                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// Chip que muestra el estado de la conexión con color indicativo
-class _StatusChip extends StatelessWidget {
-  final String  status;
-  final String? phone;
-  const _StatusChip({required this.status, this.phone});
-
-  @override
-  Widget build(BuildContext context) {
-    final (color, label, icon) = switch (status) {
-      'connected'   => (AppColors.success, phone != null ? '+$phone' : 'Conectado', Icons.check_circle_outline),
-      'connecting'  => (AppColors.warning, 'Esperando escaneo...', Icons.qr_code_scanner),
-      _             => (AppColors.textSecondary, 'Sin conectar', Icons.phone_disabled_outlined),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 6),
-          Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w500)),
         ],
       ),
     );
