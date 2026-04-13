@@ -87,13 +87,14 @@ class AppSidebar extends StatelessWidget {
             ),
           ),
 
-          // Botón de logout en la parte inferior
+          // Indicador de usuario y logout
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 20),
             child: Divider(color: AppColors.border, height: 1),
           ),
+          _UserFooter(),
           Padding(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
             child: _SidebarItem(
               item: const _NavItem(
                 icon: Icons.logout_rounded,
@@ -105,6 +106,46 @@ class AppSidebar extends StatelessWidget {
                 await context.read<AuthProvider>().logout();
                 if (context.mounted) context.go('/login');
               },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── FOOTER CON EMAIL DEL USUARIO ───────────────────────────────────────────────
+
+class _UserFooter extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final email = context.watch<AuthProvider>().userEmail;
+    if (email == null || email.isEmpty) return const SizedBox.shrink();
+
+    // Inicial del email para el avatar
+    final initial = email[0].toUpperCase();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
+      child: Row(
+        children: [
+          Container(
+            width: 28, height: 28,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Center(
+              child: Text(initial,
+                  style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              email,
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
