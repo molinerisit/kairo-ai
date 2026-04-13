@@ -1,4 +1,5 @@
-import { callClaude, type ChatMessage } from '../../shared/ai/claude.client';
+import { callAI } from '../../shared/ai/ai.queue';
+import type { ChatMessage } from '../../shared/ai/openai.client';
 import { query } from '../../shared/db/pool';
 import { createMessage } from '../conversations/conversations.service';
 
@@ -114,11 +115,11 @@ export async function runSecretary(input: SecretaryInput): Promise<SecretaryOutp
   // 3. Agregar el mensaje nuevo del usuario al historial
   history.push({ role: 'user', content: input.userMessage });
 
-  // 4. Llamar a Claude con el system prompt del negocio y el historial
-  const result = await callClaude({
+  // 4. Llamar a GPT-4o-mini a través de la cola de IA
+  const result = await callAI({
     systemPrompt: buildSystemPrompt(profile),
     messages:     history,
-  });
+  }, input.tenantId);
 
   // 5. Guardar la respuesta del agente en la tabla messages
   await createMessage(input.tenantId, input.conversationId, {

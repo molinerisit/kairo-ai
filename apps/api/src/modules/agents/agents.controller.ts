@@ -46,7 +46,7 @@ export async function invokeAgentController(req: Request, res: Response): Promis
     });
   } catch (err) {
     // Error específico de API key no configurada
-    if (err instanceof Error && err.message.includes('ANTHROPIC_API_KEY')) {
+    if (err instanceof Error && err.message.includes('OPENAI_API_KEY')) {
       res.status(503).json({ error: err.message });
       return;
     }
