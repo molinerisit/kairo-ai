@@ -870,4 +870,160 @@ export async function listConversationsController(req, res) {
 
 ---
 
+---
+
+### Issue #5 — Dashboard base en Flutter Web
+
+**Branch:** `feature/KAI-05-dashboard-flutter`
+
+#### Estructura del proyecto Flutter
+
+```
+apps/web/lib/
+├── main.dart                        ← Punto de entrada
+├── app.dart                         ← MaterialApp + GoRouter + AuthProvider
+├── features/
+│   ├── auth/
+│   │   ├── auth_service.dart        ← Llamadas HTTP al backend
+│   │   ├── auth_provider.dart       ← Estado de autenticación (Provider)
+│   │   └── login_screen.dart        ← Pantalla de login
+│   └── dashboard/
+│       ├── dashboard_shell.dart     ← Layout con sidebar (ShellRoute)
+│       └── dashboard_home.dart      ← Pantalla principal del dashboard
+└── shared/
+    ├── theme/
+    │   └── app_theme.dart           ← Colores y tema global
+    └── widgets/
+        └── sidebar.dart             ← Sidebar de navegación
+```
+
+---
+
+#### State management con Provider
+
+**Provider** es el sistema de gestión de estado que elegimos. El estado es cualquier dato que, cuando cambia, debe redibujar partes de la UI.
+
+```
+AuthProvider (ChangeNotifier)
+    │
+    ├── isLoggedIn: bool
+    ├── isLoading: bool
+    └── error: String?
+```
+
+**Flujo:**
+1. `AuthProvider.login()` llama al service, actualiza el estado
+2. `notifyListeners()` notifica a todos los widgets que observan este provider
+3. Los widgets que usan `context.watch<AuthProvider>()` se redibujan
+
+**`context.watch` vs `context.read`:**
+- `watch` → se subscribe al provider, redibuja el widget cuando cambia
+- `read` → lee el valor una sola vez sin subscribirse (para llamadas en handlers)
+
+```dart
+// En build() — se redibuja cuando cambia el estado
+final auth = context.watch<AuthProvider>();
+
+// En un botón — solo lee, no necesita redibujarse
+onPressed: () => context.read<AuthProvider>().logout()
+```
+
+---
+
+#### Routing con go_router
+
+**go_router** es el router declarativo oficial de Flutter. Define las rutas como datos, no como código imperativo.
+
+**ShellRoute — sidebar persistente:**
+```dart
+ShellRoute(
+  builder: (context, router, child) => DashboardShell(child: child),
+  routes: [
+    GoRoute(path: '/dashboard', builder: ...),
+    GoRoute(path: '/dashboard/tabla', builder: ...),
+  ],
+)
+```
+Con `ShellRoute`, el `DashboardShell` (que tiene el sidebar) se mantiene vivo mientras navegamos entre subrutas. Sin esto, el sidebar se destruiría y recrearía en cada navegación.
+
+**Redirect — protección de rutas:**
+```dart
+GoRouter(
+  refreshListenable: auth,    // se re-evalúa cuando auth cambia
+  redirect: (context, state) {
+    if (!auth.isLoggedIn && state.uri.path != '/login') return '/login';
+    if (auth.isLoggedIn  && state.uri.path == '/login') return '/dashboard';
+    return null; // null = no redirigir
+  },
+)
+```
+`refreshListenable` conecta el router con el `AuthProvider`. Cada vez que el estado de auth cambia (login, logout), el router reevalúa el redirect automáticamente.
+
+---
+
+#### Tokens en Flutter Web — SharedPreferences vs localStorage
+
+En Flutter Web, `SharedPreferences` usa internamente `localStorage` del navegador. Es la forma idiomática de persistir datos simples en Flutter multiplataforma.
+
+```dart
+// Guardar
+final prefs = await SharedPreferences.getInstance();
+await prefs.setString('access_token', token);
+
+// Leer
+final token = prefs.getString('access_token');
+
+// Eliminar (logout)
+await prefs.remove('access_token');
+```
+
+**Consideración de seguridad:** `localStorage` es accesible por JavaScript en la misma página. En producción, para tokens de alta seguridad se usaría `flutter_secure_storage` que usa cookies `HttpOnly` en web.
+
+---
+
+#### StatefulWidget vs StatelessWidget
+
+```dart
+// StatelessWidget: no tiene estado interno, solo recibe props y dibuja
+class DashboardHome extends StatelessWidget { ... }
+
+// StatefulWidget: tiene estado interno que puede cambiar
+class LoginScreen extends StatefulWidget {
+  // El estado vive en _LoginScreenState
+  // Se usa cuando necesitamos TextEditingController, animaciones, etc.
+}
+```
+
+**Regla simple:** usar `StatelessWidget` siempre que se pueda. Usar `StatefulWidget` cuando el widget necesita datos que cambian internamente (formularios, animaciones, timers).
+
+---
+
+#### Dispose — limpieza de recursos
+
+```dart
+@override
+void dispose() {
+  _emailController.dispose();    // libera memoria del controller
+  _passwordController.dispose();
+  super.dispose();               // llama al dispose del padre
+}
+```
+
+`TextEditingController` tiene listeners internos. Si no se llama a `dispose()` cuando el widget se destruye, esos listeners quedan vivos en memoria. Esto se llama **memory leak** (fuga de memoria). Flutter detecta estos leaks en modo debug y muestra warnings.
+
+---
+
+#### Tabla de rutas del frontend
+
+| Ruta | Protegida | Widget |
+|---|---|---|
+| `/login` | ❌ público | `LoginScreen` |
+| `/dashboard` | ✅ auth | `DashboardHome` |
+| `/dashboard/tabla` | ✅ auth | `_Placeholder` (Sprint 2) |
+| `/dashboard/calendario` | ✅ auth | `_Placeholder` (Sprint 2) |
+| `/dashboard/conversaciones` | ✅ auth | `_Placeholder` (Sprint 3) |
+| `/dashboard/configuracion` | ✅ auth | `_Placeholder` (Sprint 2) |
+
+---
+
 *Este manual fue generado al inicio del proyecto Kairo AI — Abril 2026.*
