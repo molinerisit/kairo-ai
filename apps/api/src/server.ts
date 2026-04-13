@@ -20,11 +20,22 @@ const app = express();
 app.use(helmet());
 
 // cors: permite que el frontend (Flutter Web) llame a esta API
-// En producción, reemplazar origin por el dominio real
+// Acepta la URL de producción de Vercel, cualquier preview deploy (*.vercel.app)
+// y localhost en desarrollo.
+const ALLOWED_ORIGINS = [
+  env.ALLOWED_ORIGIN,
+  'https://kairo-web-ashen.vercel.app',
+  'http://localhost:8080',
+].filter(Boolean) as string[];
+
 app.use(cors({
-  origin: env.ALLOWED_ORIGIN ?? (env.NODE_ENV === 'production'
-    ? 'https://kairo-web-ashen.vercel.app'
-    : 'http://localhost:8080'),
+  origin: (origin, callback) => {
+    // Sin origin (ej: curl, Postman) o dominio permitido exacto
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    // Preview deploys de Vercel: *.vercel.app
+    if (origin.endsWith('.vercel.app')) return callback(null, true);
+    callback(new Error(`CORS: origin no permitido: ${origin}`));
+  },
   credentials: true,
 }));
 
