@@ -2,13 +2,17 @@
   "name": "@kairo/api",
   "version": "1.0.0",
   "description": "Kairo AI — Backend API",
+  "type": "module",
   "main": "dist/server.js",
   "scripts": {
     "dev": "nodemon --exec \"node --import tsx/esm src/server.ts\" --ext ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "lint": "eslint src",
-    "test": "echo \"tests pendientes\" && exit 0"
+    "test": "echo \"tests pendientes\" && exit 0",
+    "migrate:up": "node-pg-migrate up --migrations-dir db/migrations",
+    "migrate:down": "node-pg-migrate down --migrations-dir db/migrations",
+    "migrate:create": "node-pg-migrate create --migrations-dir db/migrations"
   },
   "keywords": [],
   "author": "",
@@ -20,6 +24,7 @@
     "express": "^5.2.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
+    "node-pg-migrate": "^8.0.4",
     "pg": "^8.20.0",
     "zod": "^4.3.6"
   },
@@ -29,6 +34,7 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.6.0",
+    "@types/node-pg-migrate": "^2.3.1",
     "@types/pg": "^8.20.0",
     "@typescript-eslint/eslint-plugin": "^8.58.1",
     "@typescript-eslint/parser": "^8.58.1",
