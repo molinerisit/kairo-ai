@@ -1171,4 +1171,109 @@ Este patrón evita el error de TypeScript `"string | string[]" is not assignable
 
 ---
 
+---
+
+### Issue #7 — Tabla dinámica UI Flutter
+
+**Branch:** `feature/KAI-07-tabla-ui`
+
+#### Archivos creados
+
+```
+lib/features/tables/
+├── table_service.dart           ← HTTP calls al backend de tablas
+├── table_provider.dart          ← Estado de tablas y filas
+├── table_screen.dart            ← Pantalla principal con topbar y grid
+└── widgets/
+    ├── table_grid.dart          ← Grilla con scroll horizontal + vertical
+    └── table_cell_editor.dart   ← Celda con modo lectura / edición inline
+```
+
+---
+
+#### Patrón de edición inline (celda tipo Excel)
+
+```dart
+class EditableCell extends StatefulWidget {
+  bool _editing = false;
+
+  // Modo lectura: muestra el valor como texto
+  Widget _buildDisplay() => GestureDetector(
+    onTap: () => setState(() => _editing = true),
+    child: Text(value),
+  );
+
+  // Modo edición: TextField con foco automático
+  Widget _buildEditor() => TextField(
+    focusNode: _focus,
+    onSubmitted: (_) => _save(),
+  );
+}
+```
+
+`FocusNode.addListener()` detecta cuando el usuario hace click afuera:
+```dart
+_focus.addListener(() {
+  if (!_focus.hasFocus && _editing) _save();
+});
+```
+
+Este patrón evita botones de "Guardar" — el guardado es automático al salir de la celda, igual que Google Sheets.
+
+---
+
+#### Por qué `WidgetsBinding.instance.addPostFrameCallback`
+
+```dart
+@override
+void initState() {
+  super.initState();
+  _provider = TableProvider();
+  WidgetsBinding.instance.addPostFrameCallback((_) => _provider.loadTables());
+}
+```
+
+No se puede llamar `setState` o `notifyListeners` durante el build. `addPostFrameCallback` ejecuta el código **después** de que el primer frame se renderizó. Es el lugar correcto para hacer el fetch inicial de datos en un `StatefulWidget`.
+
+---
+
+#### Naming conflict con widgets de Flutter
+
+`TableRow` es un widget nativo de Flutter (parte de `material.dart`). Si nombramos nuestra clase igual, Dart no sabe cuál usar y lanza un error `ambiguous_import`.
+
+Solución: renombrar nuestra clase a `DynamicRow`. Regla general: antes de nombrar una clase, buscar si ya existe en Flutter con ese nombre (`Row`, `Column`, `Table`, `Text`, `Image`, etc. están todos tomados).
+
+---
+
+### Deuda técnica acumulada — Sprint 1
+
+**Deuda técnica** son decisiones conscientes de hacer algo de forma simple ahora, sabiendo que habrá que mejorarlo después. No es código malo — es código que funciona pero que tiene limitaciones conocidas.
+
+La clave es **registrarla explícitamente**. Si no se registra, se olvida y se convierte en código malo sin intención.
+
+#### Deuda identificada en Kairo AI
+
+| # | Deuda | Dónde | Impacto | Prioridad |
+|---|---|---|---|---|
+| DT-01 | Sin refresh token — JWT vence en 15min y el usuario pierde sesión | `auth.service.ts` | Alto — UX rota | Sprint 2 |
+| DT-02 | Sin interceptor HTTP en Flutter — cada service repite el header Authorization | `table_service.dart`, `auth_service.dart` | Medio — DRY violado | Sprint 2 |
+| DT-03 | Sin sistema de migraciones — schema.sql se ejecuta a mano | `db/schema.sql` | Alto — no escalable | Sprint 2 |
+| DT-04 | Sin rate limiting en endpoints de auth — brute force posible | `auth.routes.ts` | Alto — seguridad | Sprint 2 |
+| DT-05 | Slug sin manejo de colisión — dos negocios con mismo nombre fallan | `auth.service.ts` | Medio — edge case | Sprint 3 |
+| DT-06 | Sin paginación en la UI — la tabla carga todas las filas de una | `table_grid.dart` | Bajo en MVP | Sprint 3 |
+| DT-07 | CORS hardcodeado a localhost:8080 en producción | `server.ts` | Alto — no deployable | Pre-deploy |
+| DT-08 | Sin logging estructurado — solo console.error | todos los controllers | Medio — no observable | Sprint 3 |
+| DT-09 | Sin tests — cero cobertura unitaria o de integración | todo el proyecto | Alto para escala | Sprint 2 |
+| DT-10 | Token en localStorage — accesible por JS (XSS) | `auth_service.dart` | Medio — aceptable en MVP | Sprint 4 |
+
+#### Cómo manejar deuda técnica profesionalmente
+
+1. **Registrarla** — en el MANUAL, en un issue de GitHub con label `tech-debt`, o en comentarios `// DEUDA TÉCNICA:` en el código
+2. **No resolverla toda de una** — elegir qué pagar antes según impacto y urgencia
+3. **No acumular deuda nueva sin razón** — cada atajo debe tener un `// DEUDA TÉCNICA:` que explique por qué
+
+En entrevistas, si te preguntan "¿qué mejorarías de este proyecto?", la respuesta ideal es exactamente esta tabla: conocés el problema, sabés el impacto, tenés un plan.
+
+---
+
 *Este manual fue generado al inicio del proyecto Kairo AI — Abril 2026.*
