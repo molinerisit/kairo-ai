@@ -36,3 +36,7 @@ export const query = <T extends object = Record<string, unknown>>(
   text: string,
   params?: unknown[]
 ) => pool.query<T>(text, params);
+
+// getClient: obtiene un cliente dedicado del pool para transacciones manuales.
+// Siempre llamar client.release() al terminar (en finally).
+export const getClient = () => pool.connect();
