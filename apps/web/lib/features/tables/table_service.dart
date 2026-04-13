@@ -1,8 +1,4 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../auth/auth_service.dart';
-
-const String _apiBase = 'http://localhost:3000';
+import '../../shared/api/api_client.dart';
 
 // Modelos de datos
 class TableDefinition {
@@ -67,24 +63,8 @@ class DynamicRow {
 // ── Servicio ──────────────────────────────────────────────────────
 
 class TableService {
-  // _authHeaders: agrega el JWT a cada request.
-  // DEUDA TÉCNICA: idealmente esto estaría en un interceptor HTTP centralizado
-  // para no repetirlo en cada método. Ver MANUAL.md sección de deuda técnica.
-  static Future<Map<String, String>> _authHeaders() async {
-    final token = await AuthService.getToken();
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer $token',
-    };
-  }
-
   static Future<List<TableDefinition>> listTables() async {
-    final response = await http.get(
-      Uri.parse('$_apiBase/api/tables'),
-      headers: await _authHeaders(),
-    );
-    if (response.statusCode != 200) throw Exception('Error al cargar tablas');
-    final List data = jsonDecode(response.body) as List;
+    final data = await ApiClient.get('/api/tables') as List;
     return data.map((t) => TableDefinition.fromJson(t as Map<String, dynamic>)).toList();
   }
 
@@ -93,62 +73,29 @@ class TableService {
     required List<Map<String, dynamic>> columns,
     String tableType = 'custom',
   }) async {
-    final response = await http.post(
-      Uri.parse('$_apiBase/api/tables'),
-      headers: await _authHeaders(),
-      body: jsonEncode({'name': name, 'table_type': tableType, 'columns': columns}),
-    );
-    if (response.statusCode != 201) {
-      throw Exception(jsonDecode(response.body)['error'] ?? 'Error al crear tabla');
-    }
-    return TableDefinition.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    final data = await ApiClient.post('/api/tables', body: {
+      'name': name,
+      'table_type': tableType,
+      'columns': columns,
+    });
+    return TableDefinition.fromJson(data as Map<String, dynamic>);
   }
 
   static Future<List<DynamicRow>> listRows(String tableId) async {
-    final response = await http.get(
-      Uri.parse('$_apiBase/api/tables/$tableId/rows'),
-      headers: await _authHeaders(),
-    );
-    if (response.statusCode != 200) throw Exception('Error al cargar filas');
-    final List data = jsonDecode(response.body) as List;
+    final data = await ApiClient.get('/api/tables/$tableId/rows') as List;
     return data.map((r) => DynamicRow.fromJson(r as Map<String, dynamic>)).toList();
   }
 
-  static Future<DynamicRow> createRow(
-    String tableId,
-    Map<String, dynamic> data,
-  ) async {
-    final response = await http.post(
-      Uri.parse('$_apiBase/api/tables/$tableId/rows'),
-      headers: await _authHeaders(),
-      body: jsonEncode({'data': data}),
-    );
-    if (response.statusCode != 201) {
-      throw Exception(jsonDecode(response.body)['error'] ?? 'Error al crear fila');
-    }
-    return DynamicRow.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  static Future<DynamicRow> createRow(String tableId, Map<String, dynamic> data) async {
+    final result = await ApiClient.post('/api/tables/$tableId/rows', body: {'data': data});
+    return DynamicRow.fromJson(result as Map<String, dynamic>);
   }
 
-  static Future<void> updateRow(
-    String tableId,
-    String rowId,
-    Map<String, dynamic> data,
-  ) async {
-    final response = await http.put(
-      Uri.parse('$_apiBase/api/tables/$tableId/rows/$rowId'),
-      headers: await _authHeaders(),
-      body: jsonEncode({'data': data}),
-    );
-    if (response.statusCode != 200) {
-      throw Exception(jsonDecode(response.body)['error'] ?? 'Error al actualizar');
-    }
+  static Future<void> updateRow(String tableId, String rowId, Map<String, dynamic> data) async {
+    await ApiClient.put('/api/tables/$tableId/rows/$rowId', body: {'data': data});
   }
 
   static Future<void> deleteRow(String tableId, String rowId) async {
-    final response = await http.delete(
-      Uri.parse('$_apiBase/api/tables/$tableId/rows/$rowId'),
-      headers: await _authHeaders(),
-    );
-    if (response.statusCode != 204) throw Exception('Error al eliminar fila');
+    await ApiClient.delete('/api/tables/$tableId/rows/$rowId');
   }
 }
