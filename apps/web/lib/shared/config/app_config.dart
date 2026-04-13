@@ -8,5 +8,5 @@
 /// URL base de la API. Inyectada en build con --dart-define=API_BASE_URL.
 const String kApiBase = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'http://localhost:3000',
+  defaultValue: 'https://kairo-api-production-5af7.up.railway.app',
 );
