@@ -5,7 +5,7 @@ import { createRefreshToken } from './auth.refresh.service';
 import type { RegisterInput } from './auth.schema';
 import type { AuthResponse } from './auth.types';
 
-// Convierte el nombre del negocio en un slug amigable para URLs.
+// toSlug: convierte el nombre del negocio en un slug amigable para URLs.
 // "Peluquería Marta & Co." → "peluqueria-marta-co"
 function toSlug(name: string): string {
   return name
