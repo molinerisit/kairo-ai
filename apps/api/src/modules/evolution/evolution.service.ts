@@ -31,9 +31,13 @@ export async function connectWhatsApp(tenantId: string): Promise<{ qr: string }>
     throw new Error('El número ya está conectado. Desconectalo primero para vincular otro.');
   }
 
-  // Si no existe, crear la instancia
+  // Si no existe, crear la instancia y configurar proxy residencial
   if (!status) {
     await evo.createInstance(slug);
+    // El proxy permite conectarse desde IPs de data center (DigitalOcean).
+    // WhatsApp bloquea nuevos registros desde IPs de Railway/AWS/GCP/DigitalOcean.
+    // Evolution API valida el proxy antes de guardarlo; si falla, lanza error.
+    await evo.setProxy(slug);
   }
 
   // Actualizar estado en DB

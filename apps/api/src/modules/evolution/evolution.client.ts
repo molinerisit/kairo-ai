@@ -86,6 +86,23 @@ export async function deleteInstance(instanceName: string): Promise<void> {
   await request('DELETE', `/instance/delete/${instanceName}`);
 }
 
+// setProxy: configura el proxy residencial en la instancia.
+// Necesario para que Baileys pueda conectarse a WhatsApp desde IPs de data center.
+// Evolution API valida que el proxy sea alcanzable antes de guardarlo.
+export async function setProxy(instanceName: string): Promise<void> {
+  if (!env.EVOLUTION_PROXY_HOST || !env.EVOLUTION_PROXY_PORT || !env.EVOLUTION_PROXY_PROTOCOL) {
+    return; // sin proxy configurado, no hace nada
+  }
+  await request('POST', `/proxy/set/${instanceName}`, {
+    host:     env.EVOLUTION_PROXY_HOST,
+    port:     env.EVOLUTION_PROXY_PORT,
+    protocol: env.EVOLUTION_PROXY_PROTOCOL,
+    username: env.EVOLUTION_PROXY_USERNAME ?? '',
+    password: env.EVOLUTION_PROXY_PASSWORD ?? '',
+    enabled:  true,
+  });
+}
+
 // sendText: envía un mensaje de texto a un número vía la instancia conectada.
 // `to` es el número completo sin +, ej: "5491112345678"
 export async function sendText(instanceName: string, to: string, text: string): Promise<void> {
