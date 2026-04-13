@@ -18,7 +18,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
   void initState() {
     super.initState();
     _provider = ConversationProvider();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _provider.loadConversations());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _provider.loadConversations();
+      _provider.startPolling();
+    });
   }
 
   @override

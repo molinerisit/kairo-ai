@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'conversation_service.dart';
 
@@ -11,6 +12,8 @@ class ConversationProvider extends ChangeNotifier {
   bool    _isSending         = false;
   String? _error;
 
+  Timer? _pollTimer;
+
   List<Conversation> get conversations       => _conversations;
   Conversation?      get selected            => _selected;
   List<Message>      get messages            => _messages;
@@ -18,6 +21,52 @@ class ConversationProvider extends ChangeNotifier {
   bool               get isLoadingMessages   => _isLoadingMessages;
   bool               get isSending           => _isSending;
   String?            get error               => _error;
+
+  // startPolling: inicia un timer que refresca conversaciones y mensajes cada 10s.
+  // Seguro llamarlo varias veces — cancela el timer anterior si ya había uno.
+  void startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) => _silentRefresh());
+  }
+
+  void stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  @override
+  void dispose() {
+    stopPolling();
+    super.dispose();
+  }
+
+  // _silentRefresh: refresca sin mostrar spinner para no hacer flickering.
+  Future<void> _silentRefresh() async {
+    try {
+      final updated = await ConversationService.listConversations();
+
+      // Actualizar lista solo si hay cambios para evitar rebuilds innecesarios
+      final prevIds    = _conversations.map((c) => '${c.id}${c.lastMessageAt}').toSet();
+      final newIds     = updated.map((c) => '${c.id}${c.lastMessageAt}').toSet();
+      final listChanged = prevIds.length != newIds.length || !prevIds.containsAll(newIds);
+
+      if (listChanged) {
+        _conversations = updated;
+        notifyListeners();
+      }
+
+      // Si hay una conversación seleccionada, refrescar sus mensajes también
+      if (_selected != null) {
+        final msgs = await ConversationService.listMessages(_selected!.id);
+        if (msgs.length != _messages.length) {
+          _messages = msgs;
+          notifyListeners();
+        }
+      }
+    } catch (_) {
+      // Silencioso: no mostrar error en polling automático
+    }
+  }
 
   Future<void> loadConversations() async {
     _isLoadingList = true;
@@ -57,7 +106,6 @@ class ConversationProvider extends ChangeNotifier {
     _isSending = true;
     notifyListeners();
     try {
-      // Agrega el mensaje del operador (role: 'user' = mensaje del cliente/operador)
       final msg = await ConversationService.sendMessage(
         conversationId: _selected!.id,
         role: 'user',
