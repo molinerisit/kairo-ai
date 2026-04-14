@@ -106,25 +106,16 @@
     <div class="spinner"></div>
   </div>
 
+  <!-- Flutter bootstrap — se encarga de cargar el engine automáticamente -->
+  <script src="flutter_bootstrap.js" async></script>
+
   <script>
-    // Inicialización controlada de Flutter para poder ocultar el splash
-    // cuando el engine termina de cargar.
-    window.addEventListener('load', function() {
+    // Flutter dispara 'flutter-first-frame' cuando pinta su primer frame real.
+    // Es el momento seguro para ocultar el splash sin flickering.
+    window.addEventListener('flutter-first-frame', function() {
       var loading = document.getElementById('flutter-loading');
-
-      _flutter.loader.load({
-        onEntrypointLoaded: async function(engineInitializer) {
-          const appRunner = await engineInitializer.initializeEngine();
-
-          // Ocultar splash con fade-out antes de que Flutter pinte su primer frame
-          loading.classList.add('hidden');
-          setTimeout(function() {
-            loading.style.display = 'none';
-          }, 300);
-
-          await appRunner.runApp();
-        }
-      });
+      loading.classList.add('hidden');
+      setTimeout(function() { loading.style.display = 'none'; }, 300);
     });
   </script>
 </body>
