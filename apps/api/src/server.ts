@@ -40,8 +40,14 @@ app.use(cors({
   credentials: true,
 }));
 
-// express.json: parsea el body de las requests como JSON
-app.use(express.json());
+// express.json: parsea el body de las requests como JSON.
+// La opción `verify` captura el raw body buffer para que el webhook de Meta
+// pueda verificar la firma HMAC-SHA256 sobre los bytes originales.
+app.use(express.json({
+  verify: (req: any, _res, buf) => {
+    req.rawBody = buf;
+  },
+}));
 
 // ── Rutas ─────────────────────────────────────────────────────────
 // Montamos cada módulo con su prefijo.

@@ -77,22 +77,27 @@ async function handleWebhookAsync(body: WhatsAppWebhookBody): Promise<void> {
 }
 
 // verifySignature: verifica que el request viene realmente de Meta.
-// Meta firma cada request con HMAC-SHA256 usando el App Secret.
+// Meta firma cada request con HMAC-SHA256 usando el App Secret (META_APP_SECRET).
+// La firma se calcula sobre el raw body (bytes originales), no sobre JSON re-serializado.
 // Si no tenemos el App Secret configurado, aceptamos en dev (warning).
 function verifySignature(req: Request): boolean {
-  const appSecret = env.WHATSAPP_ACCESS_TOKEN;
+  const appSecret = env.META_APP_SECRET;
 
   // En dev sin app secret configurado, aceptamos (para testing local)
   if (!appSecret) {
-    console.warn('[Webhook] App secret no configurado — saltando verificación de firma');
+    console.warn('[Webhook] META_APP_SECRET no configurado — saltando verificación de firma');
     return true;
   }
 
   const signature = req.headers['x-hub-signature-256'] as string;
   if (!signature) return false;
 
+  // req.rawBody es el Buffer capturado por el verify callback de express.json()
+  const rawBody = (req as any).rawBody as Buffer | undefined;
+  if (!rawBody) return false;
+
   const expected = 'sha256=' + createHmac('sha256', appSecret)
-    .update(JSON.stringify(req.body))
+    .update(rawBody)
     .digest('hex');
 
   return signature === expected;
