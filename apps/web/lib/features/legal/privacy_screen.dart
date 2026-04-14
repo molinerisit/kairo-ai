@@ -335,8 +335,94 @@ class _LegalFooter extends StatelessWidget {
             onPressed: () => context.go('/terms'),
             child: const Text('Términos', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
           ),
+          TextButton(
+            onPressed: () => context.go('/data-deletion'),
+            child: const Text('Eliminación de datos', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+          ),
         ],
       ),
     );
   }
 }
+
+// ── DATA DELETION SCREEN ───────────────────────────────────────────────────────
+// Meta requiere una URL de eliminación de datos para apps con permisos de usuario.
+// Esta página explica cómo los usuarios pueden solicitar que se eliminen sus datos.
+
+class DataDeletionScreen extends StatelessWidget {
+  const DataDeletionScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            _LegalNavbar(),
+            _LegalContent(
+              title: 'Eliminación de datos',
+              lastUpdated: '14 de abril de 2026',
+              sections: _dataDeletionSections,
+            ),
+            _LegalFooter(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+const _dataDeletionSections = [
+  _LegalSection(
+    title: '¿Qué datos almacena AXIIA?',
+    content:
+        'AXIIA almacena los siguientes datos asociados a tu cuenta:\n\n'
+        '• Datos de cuenta: nombre, correo electrónico y configuración del perfil de negocio.\n'
+        '• Conversaciones: historial de mensajes de WhatsApp procesados por el agente de IA.\n'
+        '• Configuración: servicios, horarios, preguntas frecuentes y datos del negocio que cargaste.\n'
+        '• Registros técnicos: logs de actividad del sistema asociados a tu tenant.',
+  ),
+  _LegalSection(
+    title: 'Cómo solicitar la eliminación de tus datos',
+    content:
+        'Podés solicitar la eliminación completa de tu cuenta y todos los datos asociados de las siguientes maneras:\n\n'
+        '• Email: enviá un correo a hola@getaxiia.com con el asunto "Solicitud de eliminación de datos" '
+        'e indicá el correo electrónico de tu cuenta.\n'
+        '• Plazo: procesamos las solicitudes en un máximo de 30 días hábiles.\n'
+        '• Confirmación: recibirás un email de confirmación cuando la eliminación sea completada.',
+  ),
+  _LegalSection(
+    title: 'Qué se elimina',
+    content:
+        'Al procesar tu solicitud, eliminamos permanentemente:\n\n'
+        '• Tu cuenta de usuario y credenciales.\n'
+        '• El perfil y configuración de tu negocio.\n'
+        '• Todo el historial de conversaciones.\n'
+        '• Los tokens de acceso de WhatsApp asociados a tu cuenta.\n'
+        '• Cualquier dato personal identificable almacenado en nuestros sistemas.',
+  ),
+  _LegalSection(
+    title: 'Datos que podemos retener',
+    content:
+        'En algunos casos podemos retener ciertos datos por obligaciones legales:\n\n'
+        '• Registros de transacciones de pago (si aplicable) por el período requerido por ley.\n'
+        '• Datos anonimizados que no permitan identificarte, para análisis de uso del servicio.\n'
+        '• Información necesaria para resolver disputas o prevenir fraude.',
+  ),
+  _LegalSection(
+    title: 'Datos de Meta / WhatsApp',
+    content:
+        'Si usaste AXIIA con tu cuenta de WhatsApp Business, esta solicitud elimina los datos en nuestros sistemas. '
+        'Para eliminar datos en Meta/WhatsApp, debés gestionarlo directamente desde tu cuenta de Meta Business '
+        'en business.facebook.com o según las instrucciones de Meta Platforms.',
+  ),
+  _LegalSection(
+    title: 'Contacto',
+    content:
+        'Para solicitudes de eliminación de datos o consultas sobre privacidad:\n\n'
+        'Email: hola@getaxiia.com\n'
+        'Sitio web: getaxiia.com\n\n'
+        'También podés revisar nuestra Política de Privacidad completa en getaxiia.com/privacy.',
+  ),
+];

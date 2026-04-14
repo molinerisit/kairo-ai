@@ -12,11 +12,11 @@ import 'features/conversations/conversation_screen.dart';
 import 'features/calendar/calendar_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/landing/landing_screen.dart';
-import 'features/legal/privacy_screen.dart';
+import 'features/legal/privacy_screen.dart'; // PrivacyScreen, TermsScreen, DataDeletionScreen
 import 'shared/theme/app_theme.dart';
 
 // Rutas públicas: no requieren autenticación
-const _publicRoutes = ['/', '/privacy', '/terms', '/login', '/register'];
+const _publicRoutes = ['/', '/privacy', '/terms', '/data-deletion', '/login', '/register'];
 
 GoRouter _buildRouter(AuthProvider auth) => GoRouter(
   initialLocation: '/',
@@ -55,6 +55,10 @@ GoRouter _buildRouter(AuthProvider auth) => GoRouter(
     GoRoute(
       path: '/terms',
       builder: (context, state) => const TermsScreen(),
+    ),
+    GoRoute(
+      path: '/data-deletion',
+      builder: (context, state) => const DataDeletionScreen(),
     ),
 
     // ── Auth ───────────────────────────────────────────────────────
