@@ -16,12 +16,18 @@ const envSchema = z.object({
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
   // OPENAI_API_KEY: requerida para que los agentes funcionen
   OPENAI_API_KEY: z.string().optional(),
+  // ── WhatsApp / Meta Cloud API ────────────────────────────────────────────────
   // WHATSAPP_VERIFY_TOKEN: token secreto para verificar el webhook de WhatsApp
   WHATSAPP_VERIFY_TOKEN: z.string().optional(),
-  // WHATSAPP_ACCESS_TOKEN: token de la WhatsApp Business API para enviar mensajes
+  // WHATSAPP_ACCESS_TOKEN: System User token de la WhatsApp Business API
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
   // WHATSAPP_PHONE_NUMBER_ID: ID del número de WhatsApp registrado en Meta
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  // ── Meta App (para Embedded Signup y verificación de firma) ─────────────────
+  META_APP_ID: z.string().optional(),
+  META_APP_SECRET: z.string().optional(),
+  // BASE_URL: URL pública de esta API (ej: https://kairo-api.up.railway.app)
+  BASE_URL: z.string().optional(),
   // ALLOWED_ORIGIN: dominio del frontend autorizado para CORS
   // En dev: http://localhost:8080 | En prod: URL de Vercel
   ALLOWED_ORIGIN: z.string().optional(),

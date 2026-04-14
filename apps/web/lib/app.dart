@@ -11,33 +11,53 @@ import 'features/tables/table_screen.dart';
 import 'features/conversations/conversation_screen.dart';
 import 'features/calendar/calendar_screen.dart';
 import 'features/settings/settings_screen.dart';
+import 'features/landing/landing_screen.dart';
+import 'features/legal/privacy_screen.dart';
 import 'shared/theme/app_theme.dart';
 
-// _router se crea fuera de la clase para que no se reconstruya en cada rebuild.
-// refreshListenable conecta el router con el AuthProvider:
-// cada vez que notifyListeners() se llama en AuthProvider,
-// el router reevalúa el redirect — si ya no está logueado, redirige a /login.
+// Rutas públicas: no requieren autenticación
+const _publicRoutes = ['/', '/privacy', '/terms', '/login', '/register'];
+
 GoRouter _buildRouter(AuthProvider auth) => GoRouter(
-  initialLocation: '/login',
-  refreshListenable: auth, // escucha cambios en el estado de auth
+  initialLocation: '/',
+  refreshListenable: auth,
   redirect: (context, state) {
-    final loggedIn        = auth.isLoggedIn;
-    final justRegistered  = auth.justRegistered;
-    final path            = state.uri.path;
-    final isAuthPage      = path == '/login' || path == '/register';
+    final loggedIn       = auth.isLoggedIn;
+    final justRegistered = auth.justRegistered;
+    final path           = state.uri.path;
+    final isPublic       = _publicRoutes.contains(path);
 
-    // Si no está logueado y no va a una página de auth → redirigir a /login
-    if (!loggedIn && !isAuthPage) return '/login';
+    // Rutas públicas siempre accesibles sin auth
+    if (isPublic) {
+      // Si ya está logueado y va a login/register → dashboard
+      if (loggedIn && (path == '/login' || path == '/register')) return '/dashboard';
+      return null;
+    }
 
-    // Si se acaba de registrar → onboarding (primera vez)
+    // Rutas privadas: sin sesión → login
+    if (!loggedIn) return '/login';
+
+    // Primera vez registrado → onboarding
     if (loggedIn && justRegistered && path != '/onboarding') return '/onboarding';
 
-    // Si ya está logueado y va a login/register → redirigir al dashboard
-    if (loggedIn && isAuthPage) return '/dashboard';
-
-    return null; // no redirigir
+    return null;
   },
   routes: [
+    // ── Rutas públicas ─────────────────────────────────────────────
+    GoRoute(
+      path: '/',
+      builder: (context, state) => const LandingScreen(),
+    ),
+    GoRoute(
+      path: '/privacy',
+      builder: (context, state) => const PrivacyScreen(),
+    ),
+    GoRoute(
+      path: '/terms',
+      builder: (context, state) => const TermsScreen(),
+    ),
+
+    // ── Auth ───────────────────────────────────────────────────────
     GoRoute(
       path: '/login',
       builder: (context, state) => const LoginScreen(),
@@ -51,8 +71,7 @@ GoRouter _buildRouter(AuthProvider auth) => GoRouter(
       builder: (context, state) => const OnboardingScreen(),
     ),
 
-    // ShellRoute: mantiene el DashboardShell (sidebar) mientras
-    // navega entre las subrutas. El sidebar no se destruye.
+    // ── Dashboard (requiere auth) ──────────────────────────────────
     ShellRoute(
       builder: (context, router, child) => DashboardShell(child: child),
       routes: [
@@ -81,41 +100,14 @@ GoRouter _buildRouter(AuthProvider auth) => GoRouter(
   ],
 );
 
-// Pantalla placeholder para rutas que aún no están implementadas
-class _Placeholder extends StatelessWidget {
-  final String title;
-  const _Placeholder({required this.title});
+class AxiiaApp extends StatefulWidget {
+  const AxiiaApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.headlineLarge),
-            const SizedBox(height: 8),
-            const Text(
-              'Próximamente — en construcción.',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  State<AxiiaApp> createState() => _AxiiaAppState();
 }
 
-class KairoApp extends StatefulWidget {
-  const KairoApp({super.key});
-
-  @override
-  State<KairoApp> createState() => _KairoAppState();
-}
-
-class _KairoAppState extends State<KairoApp> {
+class _AxiiaAppState extends State<AxiiaApp> {
   late final AuthProvider _authProvider;
   late final GoRouter _router;
 
@@ -124,7 +116,6 @@ class _KairoAppState extends State<KairoApp> {
     super.initState();
     _authProvider = AuthProvider();
     _router       = _buildRouter(_authProvider);
-    // Verificar si hay sesión guardada al arrancar la app
     _authProvider.checkSession();
   }
 
@@ -136,12 +127,10 @@ class _KairoAppState extends State<KairoApp> {
 
   @override
   Widget build(BuildContext context) {
-    // ChangeNotifierProvider hace disponible el AuthProvider
-    // a todos los widgets descendientes via context.watch/read
     return ChangeNotifierProvider.value(
       value: _authProvider,
       child: MaterialApp.router(
-        title: 'Kairo AI',
+        title: 'AXIIA',
         theme: AppTheme.dark,
         routerConfig: _router,
         debugShowCheckedModeBanner: false,

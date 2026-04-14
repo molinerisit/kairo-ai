@@ -23,6 +23,8 @@ app.use(helmet());
 // y localhost en desarrollo.
 const ALLOWED_ORIGINS = [
   env.ALLOWED_ORIGIN,
+  'https://getaxiia.com',
+  'https://www.getaxiia.com',
   'https://kairo-web-ashen.vercel.app',
   'http://localhost:8080',
 ].filter(Boolean) as string[];

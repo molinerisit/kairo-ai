@@ -6,5 +6,5 @@ void main() {
   // Necesario cuando se usan plugins (shared_preferences, etc.)
   // antes de que corra el primer frame de la app.
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const KairoApp());
+  runApp(const AxiiaApp());
 }
