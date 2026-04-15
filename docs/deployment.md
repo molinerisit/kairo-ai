@@ -20,24 +20,25 @@
 - Restart policy: ON_FAILURE, máx 3 reintentos
 
 ### Variables de entorno en Railway
-Configurar en el dashboard de Railway → Variables:
+Estado actual (todas configuradas):
 
 ```
-NODE_ENV=production
-DATABASE_URL=           # Provista automáticamente al agregar plugin PostgreSQL
-JWT_SECRET=             # Generar con: node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
-JWT_EXPIRES_IN=15m
-JWT_REFRESH_EXPIRES_IN=7d
-ALLOWED_ORIGIN=https://kairo-web-ashen.vercel.app
-ANTHROPIC_API_KEY=      # Conseguir en console.anthropic.com
-WHATSAPP_VERIFY_TOKEN=  # Token secreto que vos definís — debe coincidir con Meta dashboard
-WHATSAPP_ACCESS_TOKEN=  # Token de acceso de la app de Meta (EAAn...)
-WHATSAPP_PHONE_NUMBER_ID= # ID del número de teléfono en Meta (ej: 1162594183593578)
-META_APP_SECRET=        # App Secret de la app de Meta (para verificar firma HMAC)
+NODE_ENV=production              ✓
+DATABASE_URL=                    ✓ (Railway PostgreSQL plugin)
+JWT_SECRET=                      ✓
+JWT_EXPIRES_IN=15m               ✓
+JWT_REFRESH_EXPIRES_IN=7d        ✓
+ALLOWED_ORIGIN=https://kairo-web-ashen.vercel.app  ✓
+BASE_URL=https://kairo-api-production-5af7.up.railway.app  ✓
+OPENAI_API_KEY=                  ✓
+WHATSAPP_VERIFY_TOKEN=kairo_webhook_secret_prod     ✓
+WHATSAPP_ACCESS_TOKEN=EAAn...    ✓
+WHATSAPP_PHONE_NUMBER_ID=1162594183593578           ✓
+META_APP_SECRET=                 ✓
 ```
 
 ### Cómo deployar
-Railway hace deploy automático al hacer push a `main` si está conectado al repo de GitHub.
+Railway hace deploy automático al hacer push a `main`.
 Para deploy manual desde CLI:
 ```bash
 railway up
@@ -51,15 +52,8 @@ railway up
 - Rewrites: todas las rutas apuntan a `index.html` (SPA routing)
 - Cache: assets estáticos cacheados 1 año (immutable)
 
-### Variables de entorno en Vercel
-Configurar en el dashboard de Vercel → Settings → Environment Variables:
-
-```
-FLUTTER_API_URL=    # URL base del backend en Railway
-```
-
 ### Cómo deployar
-Vercel hace deploy automático al hacer push a `main` si está conectado al repo de GitHub.
+Vercel hace deploy automático al hacer push a `main`.
 Para deploy manual:
 ```bash
 cd apps/web
@@ -69,32 +63,33 @@ vercel --prod
 
 ---
 
-## WhatsApp Business API — Configuración del Webhook
+## WhatsApp Business API
 
 ### Datos de la app Meta
+- **App ID:** `2750786518653266`
 - **Phone Number ID:** `1162594183593578`
-- **Access Token:** guardado en `WHATSAPP_ACCESS_TOKEN`
+- **Access Token:** guardado en `WHATSAPP_ACCESS_TOKEN` (Railway)
+- **App Secret:** guardado en `META_APP_SECRET` (Railway)
+- **Verify Token:** `kairo_webhook_secret_prod`
 
-### Configurar webhook en Meta for Developers
-
-1. Ir a [Meta for Developers](https://developers.facebook.com) → Tu App → WhatsApp → Configuration
-2. En **Webhook**:
-   - **Callback URL:** `https://kairo-api-production-5af7.up.railway.app/api/webhook/whatsapp`
-   - **Verify Token:** el valor de `WHATSAPP_VERIFY_TOKEN` en Railway
-3. Hacer clic en **Verify and Save**
-4. Suscribirse al campo **messages**
+### Webhook configurado
+- **Callback URL:** `https://kairo-api-production-5af7.up.railway.app/api/webhook/whatsapp`
+- **Campo suscripto:** `messages`
+- **Versión API:** v25.0
+- **Estado:** verificado y activo
 
 ### Cómo funciona el webhook
 ```
-Meta (mensaje entrante)
-  → POST /api/webhook/whatsapp
+Usuario final escribe por WhatsApp
+  → Meta WhatsApp Cloud API
+  → POST /api/webhook/whatsapp  (Railway)
   → Verifica firma HMAC con META_APP_SECRET
   → Responde 200 inmediatamente
-  → Procesa mensaje de forma asíncrona
+  → Agente secretario (OpenAI GPT-4o-mini)
+  → sendWhatsAppMessage() → respuesta al usuario
 ```
 
 ### Endpoint de verificación (GET)
-Meta llama a este endpoint al configurar el webhook:
 ```
 GET /api/webhook/whatsapp?hub.mode=subscribe&hub.verify_token=XXX&hub.challenge=YYY
 ```
@@ -108,7 +103,7 @@ El servidor responde con `hub.challenge` si el token coincide.
 Usuario final (WhatsApp)
   → Meta WhatsApp Cloud API
   → POST /api/webhook/whatsapp  (Railway)
-  → Agente IA (Anthropic Claude)
+  → Agente secretario (OpenAI)
   → Respuesta vía WhatsApp API
   → Usuario final
 
@@ -122,6 +117,31 @@ Operador del negocio (Panel web)
 
 ## Seguridad en producción
 
-- `META_APP_SECRET`: el backend verifica que cada request del webhook viene realmente de Meta usando HMAC-SHA256. Sin esto configurado, el servidor acepta cualquier request (solo en dev).
-- `JWT_SECRET`: debe ser un string aleatorio de al menos 48 caracteres, diferente al de dev.
-- `WHATSAPP_VERIFY_TOKEN`: puede ser cualquier string secreto — solo Meta y vos lo saben.
+- `META_APP_SECRET`: verifica que cada request del webhook viene de Meta usando HMAC-SHA256.
+- `JWT_SECRET`: string aleatorio de 48+ caracteres, diferente al de dev.
+- `WHATSAPP_VERIFY_TOKEN`: solo Meta y el servidor lo conocen.
+
+---
+
+## Estado al 2025-04-15 — Punto de retoma
+
+### Lo que está hecho y funcionando
+- [x] Backend corriendo en Railway con todas las variables configuradas
+- [x] Frontend deployado en Vercel
+- [x] Webhook de WhatsApp verificado y suscripto al campo `messages`
+- [x] Verificación HMAC con META_APP_SECRET activa en producción
+- [x] Agente secretario implementado (OpenAI GPT-4o-mini)
+
+### Pendiente — próximo paso
+- [ ] **Publicar la app en Meta** (actualmente en modo desarrollo)
+  - Mientras esté en dev, solo admins/devs/testers pueden recibir mensajes
+  - Ir a Meta for Developers → Tu App → **App Review** o botón **"Go Live"**
+  - Necesita: política de privacidad, ícono de app, descripción
+  - La URL de privacidad puede ser la página de privacidad del sitio web de Kairo
+
+- [ ] Registrar el número de producción en `business_profiles` de la DB
+  - El webhook busca el tenant por `whatsapp_phone_number_id`
+  - Sin ese registro en la DB, los mensajes llegan pero no se procesan
+  - Query: `INSERT INTO business_profiles (tenant_id, whatsapp, ...) VALUES (...)`
+
+- [ ] Probar el flujo completo end-to-end con un mensaje real desde WhatsApp
