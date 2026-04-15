@@ -35,6 +35,7 @@ kairos/
 - [Arquitectura técnica](./docs/architecture.md)
 - [Modelo de datos](./docs/data-model.md)
 - [Workflow de desarrollo](./docs/workflow.md)
+- [Deployment e infraestructura](./docs/deployment.md)
 
 ## Cómo empezar
 
