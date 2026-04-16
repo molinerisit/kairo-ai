@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'settings_service.dart';
-import '../../shared/api/api_client.dart';
 import '../../shared/theme/app_theme.dart';
+import '../whatsapp/whatsapp_embedded_signup.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -76,7 +76,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(height: 24),
                       _AgentSection(profile: _profile!, onSaved: _load),
                       const SizedBox(height: 24),
-                      _WhatsAppSection(profile: _profile!, onSaved: _load),
+                      const WhatsAppConnectSection(),
                     ],
                   ),
                 ),
@@ -419,133 +419,6 @@ class _AgentSectionState extends State<_AgentSection> {
   }
 }
 
-// ── SECCIÓN WHATSAPP ───────────────────────────────────────────────────────────
-
-class _WhatsAppSection extends StatefulWidget {
-  final BusinessProfile profile;
-  final VoidCallback onSaved;
-  const _WhatsAppSection({required this.profile, required this.onSaved});
-
-  @override
-  State<_WhatsAppSection> createState() => _WhatsAppSectionState();
-}
-
-class _WhatsAppSectionState extends State<_WhatsAppSection> {
-  late final TextEditingController _phoneIdCtrl;
-  bool    _saving = false;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _phoneIdCtrl = TextEditingController(text: widget.profile.whatsapp ?? '');
-  }
-
-  @override
-  void dispose() {
-    _phoneIdCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    setState(() { _saving = true; _error = null; });
-    try {
-      await SettingsService.updateProfile({'whatsapp': _phoneIdCtrl.text.trim()});
-      widget.onSaved();
-    } catch (e) {
-      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
-    } finally {
-      setState(() => _saving = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final connected = (widget.profile.whatsapp ?? '').isNotEmpty;
-    return _SectionCard(
-      title:    'WhatsApp Business',
-      subtitle: 'Conectá tu número mediante Meta Cloud API',
-      icon:     Icons.chat_outlined,
-      onSave:   _save,
-      saving:   _saving,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Estado ──────────────────────────────────────────────
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: (connected ? AppColors.success : AppColors.textSecondary).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: (connected ? AppColors.success : AppColors.textSecondary).withValues(alpha: 0.3),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  connected ? Icons.check_circle_outline : Icons.phone_disabled_outlined,
-                  size: 14,
-                  color: connected ? AppColors.success : AppColors.textSecondary,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  connected ? 'Configurado' : 'Sin configurar',
-                  style: TextStyle(
-                    color: connected ? AppColors.success : AppColors.textSecondary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // ── Campo Phone Number ID ────────────────────────────────
-          _Field(
-            controller: _phoneIdCtrl,
-            label: 'Phone Number ID',
-            hint:  'ej: 123456789012345',
-          ),
-          const SizedBox(height: 12),
-
-          // ── Instrucciones ────────────────────────────────────────
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
-            ),
-            child: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Cómo obtener el Phone Number ID:',
-                    style: TextStyle(color: AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.w600)),
-                SizedBox(height: 6),
-                Text(
-                  '1. Abrí Meta for Developers → Tu app\n'
-                  '2. WhatsApp → Configuración de API\n'
-                  '3. Copiá el "ID de número de teléfono"\n'
-                  '4. Configurá el webhook con la URL de tu kairo y el verify token',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.6),
-                ),
-              ],
-            ),
-          ),
-
-          // ── Error ────────────────────────────────────────────────
-          if (_error != null) ...[
-            const SizedBox(height: 8),
-            Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 12)),
-          ],
-        ],
-      ),
-    );
-  }
-}
 
 // ── CAMPO DE TEXTO REUTILIZABLE ────────────────────────────────────────────────
 

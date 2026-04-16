@@ -52,14 +52,15 @@ export async function processIncomingMessage(
   externalMsgId: string   // ID del mensaje en WhatsApp para deduplicación
 ): Promise<void> {
   // 1. Encontrar qué tenant tiene este número de WhatsApp
-  //    El phone_number_id identifica el número de negocio en la WhatsApp API
+  //    Resolvemos por whatsapp_connections.phone_number_id (arquitectura multi-tenant)
   const tenantResult = await query<{ tenant_id: string }>(
-    `SELECT tenant_id FROM business_profiles WHERE whatsapp = $1`,
+    `SELECT tenant_id FROM whatsapp_connections
+     WHERE phone_number_id = $1 AND status = 'active'`,
     [phoneNumberId]
   );
 
   if (tenantResult.rows.length === 0) {
-    console.warn(`[Webhook] No se encontró tenant para phone_number_id: ${phoneNumberId}`);
+    console.warn(`[Webhook] No se encontró tenant activo para phone_number_id: ${phoneNumberId}`);
     return;
   }
 

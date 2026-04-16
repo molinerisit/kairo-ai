@@ -106,6 +106,71 @@
     <div class="spinner"></div>
   </div>
 
+  <!-- Facebook SDK para Embedded Signup de WhatsApp -->
+  <div id="fb-root"></div>
+  <script>
+    window.fbAsyncInit = function() {
+      FB.init({
+        appId:   '901884192883126',
+        version: 'v21.0',
+        xfbml:   false,
+        cookie:  true,
+      });
+    };
+
+    // Carga el SDK de forma asíncrona
+    (function(d, s, id) {
+      if (d.getElementById(id)) return;
+      var js = d.createElement(s); js.id = id;
+      js.src = 'https://connect.facebook.net/en_US/sdk.js';
+      d.head.appendChild(js);
+    }(document, 'script', 'facebook-jssdk'));
+
+    // kairoStartWhatsAppSignup: llamado desde Flutter vía JS interop.
+    // Abre el popup de Embedded Signup de Meta para WhatsApp Cloud API.
+    // Devuelve una Promise con { code, waba_id, phone_number_id } o rechaza con un error.
+    window.kairoStartWhatsAppSignup = function() {
+      return new Promise(function(resolve, reject) {
+        var sessionInfo = {};
+
+        FB.login(function(response) {
+          if (response.authResponse && response.authResponse.code) {
+            resolve({
+              code:            response.authResponse.code,
+              waba_id:         sessionInfo.waba_id         || null,
+              phone_number_id: sessionInfo.phone_number_id || null,
+            });
+          } else {
+            reject(new Error(response.status === 'unknown'
+              ? 'El usuario canceló la conexión'
+              : 'No se pudo obtener autorización de Meta'));
+          }
+        }, {
+          config_id:    '',
+          response_type: 'code',
+          override_default_response_type: true,
+          extras: {
+            feature:        'whatsapp_embedded_signup',
+            sessionInfoVersion: 3,
+            setup: {},
+          },
+        });
+
+        // Captura el sessionInfo que Meta devuelve con waba_id y phone_number_id
+        window.addEventListener('message', function onMsg(event) {
+          if (event.origin !== 'https://www.facebook.com') return;
+          try {
+            var data = JSON.parse(event.data);
+            if (data.type === 'WA_EMBEDDED_SIGNUP' && data.event === 'FINISH') {
+              sessionInfo = data.data || {};
+              window.removeEventListener('message', onMsg);
+            }
+          } catch (_) {}
+        });
+      });
+    };
+  </script>
+
   <!-- Flutter bootstrap — se encarga de cargar el engine automáticamente -->
   <script src="flutter_bootstrap.js" async></script>
 
