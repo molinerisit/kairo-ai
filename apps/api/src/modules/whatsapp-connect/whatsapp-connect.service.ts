@@ -1,79 +1,94 @@
 import { query } from '../../shared/db/pool';
-import { env } from '../../config/env';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
 
 // ── TIPOS ─────────────────────────────────────────────────────────────────────
 
 export interface WhatsAppConnection {
-  id:               string;
-  tenant_id:        string;
-  waba_id:          string | null;
-  phone_number_id:  string | null;
-  phone_number:     string | null;
-  status:           'pending' | 'active' | 'inactive' | 'error';
-  created_at:       string;
-  updated_at:       string;
+  id:              string;
+  tenant_id:       string;
+  waba_id:         string | null;
+  phone_number_id: string | null;
+  phone_number:    string | null;
+  status:          'pending' | 'active' | 'inactive' | 'error';
+  created_at:      string;
+  updated_at:      string;
 }
 
-export interface ConnectInput {
-  code:            string;
-  waba_id?:        string;
-  phone_number_id?: string;
+export interface PhoneNumberOption {
+  phone_number_id:      string;
+  display_phone_number: string;
+  verified_name:        string;
+  waba_id:              string;
+  waba_name:            string;
+}
+
+// ── GET AVAILABLE ACCOUNTS ────────────────────────────────────────────────────
+// Recibe el access_token del usuario (desde FB.login en el frontend).
+// Devuelve todos los números de WhatsApp accesibles en sus WABAs.
+
+export async function getAvailableAccounts(accessToken: string): Promise<PhoneNumberOption[]> {
+  // 1. Obtener businesses del usuario
+  const bizRes  = await graphGet('/me/businesses', accessToken, 'id,name,owned_whatsapp_business_accounts{id,name}');
+  const bizData = bizRes as any;
+
+  const numbers: PhoneNumberOption[] = [];
+
+  const businesses: any[] = bizData?.data ?? [];
+
+  for (const biz of businesses) {
+    const wabas: any[] = biz.owned_whatsapp_business_accounts?.data ?? [];
+
+    for (const waba of wabas) {
+      // 2. Por cada WABA, traer sus números
+      const phoneRes  = await graphGet(`/${waba.id}/phone_numbers`, accessToken, 'id,display_phone_number,verified_name');
+      const phoneData = phoneRes as any;
+
+      for (const phone of (phoneData?.data ?? [])) {
+        numbers.push({
+          phone_number_id:      phone.id,
+          display_phone_number: phone.display_phone_number,
+          verified_name:        phone.verified_name ?? biz.name,
+          waba_id:              waba.id,
+          waba_name:            waba.name ?? biz.name,
+        });
+      }
+    }
+  }
+
+  return numbers;
 }
 
 // ── CONNECT ───────────────────────────────────────────────────────────────────
-// Flujo completo del Embedded Signup:
-// 1. Intercambia el code de OAuth por un access token de Meta
-// 2. Obtiene el WABA y phone_number_id si no vienen del frontend
-// 3. Suscribe la app al WABA para recibir webhooks
-// 4. Guarda la conexión en DB
+// Guarda la conexión elegida por el usuario y suscribe la app al WABA.
 
 export async function connectWhatsApp(
-  tenantId: string,
-  input: ConnectInput,
+  tenantId:      string,
+  accessToken:   string,
+  wabaId:        string,
+  phoneNumberId: string,
 ): Promise<WhatsAppConnection> {
-  const appId     = env.META_APP_ID;
-  const appSecret = env.META_APP_SECRET;
+  // Traer el número de display
+  const phoneRes  = await graphGet(`/${phoneNumberId}`, accessToken, 'display_phone_number');
+  const displayPhone = (phoneRes as any)?.display_phone_number ?? null;
 
-  if (!appId || !appSecret) {
-    throw { statusCode: 500, message: 'META_APP_ID o META_APP_SECRET no configurados' };
-  }
+  // Suscribir la app al WABA para recibir webhooks de este tenant
+  await subscribeAppToWaba(wabaId, accessToken);
 
-  // 1. Intercambiar code → access token de usuario
-  const token = await exchangeCode(input.code, appId, appSecret);
-
-  // 2. Resolver waba_id y phone_number_id
-  let wabaId        = input.waba_id;
-  let phoneNumberId = input.phone_number_id;
-  let displayPhone: string | null = null;
-
-  if (!wabaId || !phoneNumberId) {
-    const resolved = await resolveWabaAndPhone(token, wabaId);
-    wabaId        = resolved.wabaId;
-    phoneNumberId = resolved.phoneNumberId;
-    displayPhone  = resolved.displayPhone;
-  } else {
-    displayPhone = await getDisplayPhone(phoneNumberId, token);
-  }
-
-  // 3. Suscribir la app al WABA para recibir webhooks de este tenant
-  await subscribeAppToWaba(wabaId, token);
-
-  // 4. Upsert en DB (un tenant = una conexión)
+  // Upsert: un tenant = una conexión activa
   const result = await query<WhatsAppConnection>(
     `INSERT INTO whatsapp_connections
        (tenant_id, waba_id, phone_number_id, phone_number, access_token, status)
      VALUES ($1, $2, $3, $4, $5, 'active')
      ON CONFLICT (tenant_id) DO UPDATE SET
-       waba_id        = EXCLUDED.waba_id,
+       waba_id         = EXCLUDED.waba_id,
        phone_number_id = EXCLUDED.phone_number_id,
-       phone_number   = EXCLUDED.phone_number,
-       access_token   = EXCLUDED.access_token,
-       status         = 'active',
-       updated_at     = now()
+       phone_number    = EXCLUDED.phone_number,
+       access_token    = EXCLUDED.access_token,
+       status          = 'active',
+       updated_at      = now()
      RETURNING id, tenant_id, waba_id, phone_number_id, phone_number, status, created_at, updated_at`,
-    [tenantId, wabaId, phoneNumberId, displayPhone, token],
+    [tenantId, wabaId, phoneNumberId, displayPhone, accessToken],
   );
 
   return result.rows[0];
@@ -94,57 +109,18 @@ export async function getConnection(tenantId: string): Promise<WhatsAppConnectio
 
 export async function disconnectWhatsApp(tenantId: string): Promise<void> {
   await query(
-    `UPDATE whatsapp_connections SET status = 'inactive', updated_at = now()
-     WHERE tenant_id = $1`,
+    `UPDATE whatsapp_connections SET status = 'inactive', updated_at = now() WHERE tenant_id = $1`,
     [tenantId],
   );
 }
 
-// ── HELPERS META API ──────────────────────────────────────────────────────────
+// ── HELPERS ───────────────────────────────────────────────────────────────────
 
-async function exchangeCode(code: string, appId: string, appSecret: string): Promise<string> {
-  const url = `${GRAPH}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&code=${code}`;
-  const res = await fetch(url);
-  const data = await res.json() as { access_token?: string; error?: { message: string } };
-
-  if (!res.ok || !data.access_token) {
-    const msg = data.error?.message ?? 'Error intercambiando code de Meta';
-    throw { statusCode: 400, message: msg };
-  }
-
-  return data.access_token;
-}
-
-async function resolveWabaAndPhone(token: string, wabaId?: string): Promise<{
-  wabaId: string;
-  phoneNumberId: string;
-  displayPhone: string | null;
-}> {
-  // Obtener WABAs asociados al token de usuario
-  if (!wabaId) {
-    const res = await fetch(`${GRAPH}/me/businesses?fields=owned_whatsapp_business_accounts&access_token=${token}`);
-    const data = await res.json() as any;
-    wabaId = data?.data?.[0]?.owned_whatsapp_business_accounts?.data?.[0]?.id;
-    if (!wabaId) throw { statusCode: 400, message: 'No se encontró ningún WABA asociado al token' };
-  }
-
-  // Obtener números de teléfono del WABA
-  const res2 = await fetch(`${GRAPH}/${wabaId}/phone_numbers?fields=id,display_phone_number&access_token=${token}`);
-  const data2 = await res2.json() as any;
-  const phone = data2?.data?.[0];
-  if (!phone) throw { statusCode: 400, message: 'No se encontró ningún número en el WABA' };
-
-  return {
-    wabaId,
-    phoneNumberId: phone.id,
-    displayPhone:  phone.display_phone_number ?? null,
-  };
-}
-
-async function getDisplayPhone(phoneNumberId: string, token: string): Promise<string | null> {
-  const res = await fetch(`${GRAPH}/${phoneNumberId}?fields=display_phone_number&access_token=${token}`);
-  const data = await res.json() as any;
-  return data?.display_phone_number ?? null;
+async function graphGet(path: string, token: string, fields?: string): Promise<unknown> {
+  const params = new URLSearchParams({ access_token: token });
+  if (fields) params.set('fields', fields);
+  const res = await fetch(`${GRAPH}${path}?${params}`);
+  return res.json();
 }
 
 async function subscribeAppToWaba(wabaId: string, token: string): Promise<void> {
@@ -154,6 +130,6 @@ async function subscribeAppToWaba(wabaId: string, token: string): Promise<void> 
   });
   if (!res.ok) {
     const data = await res.json() as any;
-    console.warn('[WhatsApp Connect] No se pudo suscribir al WABA:', data?.error?.message);
+    console.warn('[WhatsApp] No se pudo suscribir al WABA:', data?.error?.message);
   }
 }

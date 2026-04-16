@@ -126,46 +126,24 @@
       d.head.appendChild(js);
     }(document, 'script', 'facebook-jssdk'));
 
-    // kairoStartWhatsAppSignup: llamado desde Flutter vía JS interop.
-    // Abre el popup de Embedded Signup de Meta para WhatsApp Cloud API.
-    // Devuelve una Promise con { code, waba_id, phone_number_id } o rechaza con un error.
-    window.kairoStartWhatsAppSignup = function() {
+    // kairoLoginMeta: abre el popup de Facebook Login con permisos de WhatsApp Business.
+    // Devuelve una Promise con { access_token } para que Flutter pueda fetchear
+    // los WABAs y números del usuario y mostrarle un picker.
+    window.kairoLoginMeta = function() {
       return new Promise(function(resolve, reject) {
-        var sessionInfo = {};
-
         FB.login(function(response) {
-          if (response.authResponse && response.authResponse.code) {
-            resolve({
-              code:            response.authResponse.code,
-              waba_id:         sessionInfo.waba_id         || null,
-              phone_number_id: sessionInfo.phone_number_id || null,
-            });
+          if (response.authResponse && response.authResponse.accessToken) {
+            resolve({ access_token: response.authResponse.accessToken });
           } else {
-            reject(new Error(response.status === 'unknown'
-              ? 'El usuario canceló la conexión'
-              : 'No se pudo obtener autorización de Meta'));
+            reject(new Error(
+              response.status === 'unknown'
+                ? 'Cancelaste la conexión con Meta'
+                : 'No se pudo obtener autorización de Meta'
+            ));
           }
         }, {
-          config_id:    '901884192883126',
-          response_type: 'code',
-          override_default_response_type: true,
-          extras: {
-            feature:        'whatsapp_embedded_signup',
-            sessionInfoVersion: 3,
-            setup: {},
-          },
-        });
-
-        // Captura el sessionInfo que Meta devuelve con waba_id y phone_number_id
-        window.addEventListener('message', function onMsg(event) {
-          if (event.origin !== 'https://www.facebook.com') return;
-          try {
-            var data = JSON.parse(event.data);
-            if (data.type === 'WA_EMBEDDED_SIGNUP' && data.event === 'FINISH') {
-              sessionInfo = data.data || {};
-              window.removeEventListener('message', onMsg);
-            }
-          } catch (_) {}
+          scope: 'whatsapp_business_management,business_management',
+          return_scopes: true,
         });
       });
     };

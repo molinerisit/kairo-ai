@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import 'whatsapp_connect_service.dart';
 import '../../shared/theme/app_theme.dart';
 
-// interop con la función kairoStartWhatsAppSignup() definida en index.html
-@JS('kairoStartWhatsAppSignup')
-external JSPromise<JSObject> _startSignup();
+@JS('kairoLoginMeta')
+external JSPromise<JSObject> _loginMeta();
+
+// ── ESTADOS DEL FLUJO ─────────────────────────────────────────────────────────
+
+enum _Step { idle, logging, picking, connecting, done }
 
 class WhatsAppConnectSection extends StatefulWidget {
   const WhatsAppConnectSection({super.key});
@@ -15,22 +18,25 @@ class WhatsAppConnectSection extends StatefulWidget {
 }
 
 class _WhatsAppConnectSectionState extends State<WhatsAppConnectSection> {
-  WhatsAppConnection? _connection;
-  bool    _loading    = true;
-  bool    _connecting = false;
-  String? _error;
+  WhatsAppConnection?       _connection;
+  List<PhoneNumberOption>   _options     = [];
+  PhoneNumberOption?        _selected;
+  String?                   _accessToken;
+  _Step                     _step        = _Step.idle;
+  bool                      _loading     = true;
+  String?                   _error;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _loadConnection();
   }
 
-  Future<void> _load() async {
+  Future<void> _loadConnection() async {
     setState(() { _loading = true; _error = null; });
     try {
       final conn = await WhatsAppConnectService.getConnection();
-      setState(() => _connection = conn);
+      setState(() { _connection = conn; _step = _Step.idle; });
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -38,38 +44,61 @@ class _WhatsAppConnectSectionState extends State<WhatsAppConnectSection> {
     }
   }
 
-  Future<void> _startConnect() async {
-    setState(() { _connecting = true; _error = null; });
+  // Paso 1: login con Meta → obtener access token
+  Future<void> _startLogin() async {
+    setState(() { _step = _Step.logging; _error = null; });
     try {
-      // 1. Abre el popup de Embedded Signup de Meta
-      final result = await _startSignup().toDart;
-      final jsObj  = result.dartify() as Map<Object?, Object?>?;
+      final result = await _loginMeta().toDart;
+      final map    = result.dartify() as Map<Object?, Object?>?;
+      final token  = map?['access_token'] as String?;
 
-      if (jsObj == null) throw Exception('No se recibió respuesta del popup de Meta');
+      if (token == null) throw Exception('No se recibió token de Meta');
 
-      final code           = jsObj['code']            as String?;
-      final wabaId         = jsObj['waba_id']         as String?;
-      final phoneNumberId  = jsObj['phone_number_id'] as String?;
+      // Paso 2: fetchear WABAs y números
+      final options = await WhatsAppConnectService.getAccounts(token);
 
-      if (code == null) throw Exception('Meta no devolvió el código de autorización');
+      if (options.isEmpty) {
+        throw Exception(
+          'No encontramos números de WhatsApp Business en tu cuenta de Meta.\n'
+          'Asegurate de tener un WABA y al menos un número registrado.',
+        );
+      }
 
-      // 2. Envía el code al backend para completar la vinculación
-      final conn = await WhatsAppConnectService.connect(
-        code: code,
-        wabaId: wabaId,
-        phoneNumberId: phoneNumberId,
-      );
-
-      setState(() => _connection = conn);
+      setState(() {
+        _accessToken = token;
+        _options     = options;
+        _selected    = options.length == 1 ? options.first : null;
+        _step        = _Step.picking;
+      });
     } catch (e) {
-      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
-    } finally {
-      setState(() => _connecting = false);
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _step  = _Step.idle;
+      });
+    }
+  }
+
+  // Paso 3: confirmar el número elegido
+  Future<void> _confirmConnect() async {
+    if (_selected == null || _accessToken == null) return;
+    setState(() { _step = _Step.connecting; _error = null; });
+    try {
+      final conn = await WhatsAppConnectService.connect(
+        accessToken:   _accessToken!,
+        wabaId:        _selected!.wabaId,
+        phoneNumberId: _selected!.phoneNumberId,
+      );
+      setState(() { _connection = conn; _step = _Step.done; });
+    } catch (e) {
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _step  = _Step.picking;
+      });
     }
   }
 
   Future<void> _disconnect() async {
-    final confirmed = await showDialog<bool>(
+    final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppColors.surface,
@@ -78,29 +107,16 @@ class _WhatsAppConnectSectionState extends State<WhatsAppConnectSection> {
         content: const Text('Tu número dejará de recibir mensajes en AXIIA.',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar', style: TextStyle(color: AppColors.textSecondary)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Desconectar', style: TextStyle(color: AppColors.danger)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar', style: TextStyle(color: AppColors.textSecondary))),
+          TextButton(onPressed: () => Navigator.pop(context, true),
+              child: const Text('Desconectar', style: TextStyle(color: AppColors.danger))),
         ],
       ),
     );
-
-    if (confirmed != true) return;
-
-    setState(() { _connecting = true; _error = null; });
-    try {
-      await WhatsAppConnectService.disconnect();
-      await _load();
-    } catch (e) {
-      setState(() => _error = e.toString());
-    } finally {
-      setState(() => _connecting = false);
-    }
+    if (ok != true) return;
+    await WhatsAppConnectService.disconnect();
+    await _loadConnection();
   }
 
   @override
@@ -116,58 +132,34 @@ class _WhatsAppConnectSectionState extends State<WhatsAppConnectSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header ────────────────────────────────────────────────
-          Row(
-            children: [
-              Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF25D366).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.chat_outlined, color: Color(0xFF25D366), size: 18),
-              ),
-              const SizedBox(width: 12),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('WhatsApp Business',
-                      style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
-                  Text('Conectá tu número de WhatsApp',
-                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                ],
-              ),
-            ],
-          ),
+          _SectionHeader(isActive: _connection?.isActive ?? false),
           const SizedBox(height: 20),
           const Divider(color: AppColors.border, height: 1),
           const SizedBox(height: 20),
 
           if (_loading)
-            const Center(child: SizedBox(
-              width: 20, height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-            ))
-          else ...[
-            _StatusBadge(connection: _connection),
-            const SizedBox(height: 20),
+            const Center(child: SizedBox(width: 20, height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)))
+          else if (_connection != null && _connection!.isActive && _step != _Step.picking)
+            _ConnectedView(connection: _connection!, onDisconnect: _disconnect)
+          else if (_step == _Step.picking)
+            _PickerView(
+              options:   _options,
+              selected:  _selected,
+              loading:   _step == _Step.connecting,
+              onSelect:  (o) => setState(() => _selected = o),
+              onConfirm: _step == _Step.connecting ? null : _confirmConnect,
+              onCancel:  () => setState(() { _step = _Step.idle; _options = []; _accessToken = null; }),
+            )
+          else
+            _DisconnectedView(
+              loading: _step == _Step.logging,
+              onConnect: _step == _Step.logging ? null : _startLogin,
+            ),
 
-            if (_connection != null && _connection!.isActive)
-              _ConnectedView(
-                connection:  _connection!,
-                onDisconnect: _connecting ? null : _disconnect,
-                loading:     _connecting,
-              )
-            else
-              _DisconnectedView(
-                onConnect: _connecting ? null : _startConnect,
-                loading:   _connecting,
-              ),
-
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 12)),
-            ],
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            _ErrorText(message: _error!),
           ],
         ],
       ),
@@ -175,74 +167,48 @@ class _WhatsAppConnectSectionState extends State<WhatsAppConnectSection> {
   }
 }
 
-// ── BADGE DE ESTADO ────────────────────────────────────────────────────────────
+// ── HEADER ─────────────────────────────────────────────────────────────────────
 
-class _StatusBadge extends StatelessWidget {
-  final WhatsAppConnection? connection;
-  const _StatusBadge({this.connection});
-
-  @override
-  Widget build(BuildContext context) {
-    final active = connection?.isActive ?? false;
-    final color  = active ? const Color(0xFF25D366) : AppColors.textSecondary;
-    final label  = active ? 'Conectado' : 'Sin conectar';
-    final icon   = active ? Icons.check_circle_outline : Icons.phone_disabled_outlined;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color:        color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border:       Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 6),
-          Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w500)),
-        ],
-      ),
-    );
-  }
-}
-
-// ── VISTA CONECTADO ────────────────────────────────────────────────────────────
-
-class _ConnectedView extends StatelessWidget {
-  final WhatsAppConnection connection;
-  final VoidCallback?      onDisconnect;
-  final bool               loading;
-
-  const _ConnectedView({
-    required this.connection,
-    required this.onDisconnect,
-    required this.loading,
-  });
+class _SectionHeader extends StatelessWidget {
+  final bool isActive;
+  const _SectionHeader({required this.isActive});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final statusColor = isActive ? const Color(0xFF25D366) : AppColors.textSecondary;
+
+    return Row(
       children: [
-        if (connection.phoneNumber != null)
-          _InfoRow(label: 'Número', value: connection.phoneNumber!),
-        if (connection.phoneNumberId != null)
-          _InfoRow(label: 'Phone Number ID', value: connection.phoneNumberId!),
-        if (connection.wabaId != null)
-          _InfoRow(label: 'WABA ID', value: connection.wabaId!),
-        const SizedBox(height: 16),
-        OutlinedButton.icon(
-          onPressed: onDisconnect,
-          icon: loading
-              ? const SizedBox(width: 14, height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.danger))
-              : const Icon(Icons.link_off, size: 16, color: AppColors.danger),
-          label: const Text('Desconectar número',
-              style: TextStyle(color: AppColors.danger, fontSize: 13)),
-          style: OutlinedButton.styleFrom(
-            side: BorderSide(color: AppColors.danger.withValues(alpha: 0.5)),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(
+            color: const Color(0xFF25D366).withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Icon(Icons.chat_outlined, color: Color(0xFF25D366), size: 18),
+        ),
+        const SizedBox(width: 12),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('WhatsApp Business',
+                  style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+              Text('Conectá tu número en 2 minutos',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: statusColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+          ),
+          child: Text(
+            isActive ? 'Conectado' : 'Sin conectar',
+            style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.w600),
           ),
         ),
       ],
@@ -250,56 +216,238 @@ class _ConnectedView extends StatelessWidget {
   }
 }
 
-class _InfoRow extends StatelessWidget {
-  final String label;
-  final String value;
-  const _InfoRow({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: Row(
-      children: [
-        Text('$label: ', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-        Text(value, style: const TextStyle(color: AppColors.textPrimary, fontSize: 12, fontFamily: 'monospace')),
-      ],
-    ),
-  );
-}
-
-// ── VISTA DESCONECTADO ─────────────────────────────────────────────────────────
+// ── VISTA: DESCONECTADO ────────────────────────────────────────────────────────
 
 class _DisconnectedView extends StatelessWidget {
-  final VoidCallback? onConnect;
   final bool          loading;
-
-  const _DisconnectedView({required this.onConnect, required this.loading});
+  final VoidCallback? onConnect;
+  const _DisconnectedView({required this.loading, required this.onConnect});
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Conectá el número de WhatsApp de tu negocio. '
-          'Serás redirigido a Meta para autorizar el acceso.',
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.5),
-        ),
-        const SizedBox(height: 16),
-        FilledButton.icon(
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        'Conectá el número de WhatsApp de tu negocio. '
+        'Iniciás sesión con Meta y elegís qué número usar.',
+        style: TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.5),
+      ),
+      const SizedBox(height: 20),
+      SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
           onPressed: onConnect,
           icon: loading
               ? const SizedBox(width: 16, height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : const Icon(Icons.link, size: 16),
-          label: const Text('Conectar con Meta', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              : const Icon(Icons.login, size: 16),
+          label: Text(
+            loading ? 'Conectando con Meta...' : 'Conectar WhatsApp',
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+          ),
           style: FilledButton.styleFrom(
             backgroundColor: const Color(0xFF1877F2),
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            padding: const EdgeInsets.symmetric(vertical: 14),
           ),
         ),
+      ),
+    ],
+  );
+}
+
+// ── VISTA: PICKER DE NÚMEROS ───────────────────────────────────────────────────
+
+class _PickerView extends StatelessWidget {
+  final List<PhoneNumberOption> options;
+  final PhoneNumberOption?      selected;
+  final bool                    loading;
+  final ValueChanged<PhoneNumberOption> onSelect;
+  final VoidCallback?           onConfirm;
+  final VoidCallback            onCancel;
+
+  const _PickerView({
+    required this.options,
+    required this.selected,
+    required this.loading,
+    required this.onSelect,
+    required this.onConfirm,
+    required this.onCancel,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text('Elegí el número que querés conectar:',
+          style: TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 12),
+
+      ...options.map((opt) => _PhoneOption(
+        option:     opt,
+        isSelected: selected?.phoneNumberId == opt.phoneNumberId,
+        onTap:      () => onSelect(opt),
+      )),
+
+      const SizedBox(height: 20),
+      Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: loading ? null : onCancel,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textSecondary,
+                side: const BorderSide(color: AppColors.border),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: const Text('Cancelar'),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: FilledButton(
+              onPressed: (selected == null || loading) ? null : onConfirm,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: loading
+                  ? const SizedBox(width: 16, height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Confirmar', style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+class _PhoneOption extends StatelessWidget {
+  final PhoneNumberOption option;
+  final bool              isSelected;
+  final VoidCallback      onTap;
+
+  const _PhoneOption({required this.option, required this.isSelected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isSelected
+            ? AppColors.primary.withValues(alpha: 0.08)
+            : AppColors.background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isSelected ? AppColors.primary : AppColors.border,
+          width: isSelected ? 1.5 : 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+            color: isSelected ? AppColors.primary : AppColors.textSecondary,
+            size: 18,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(option.displayPhone,
+                    style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+                Text(option.wabaName,
+                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+// ── VISTA: CONECTADO ───────────────────────────────────────────────────────────
+
+class _ConnectedView extends StatelessWidget {
+  final WhatsAppConnection connection;
+  final VoidCallback        onDisconnect;
+  const _ConnectedView({required this.connection, required this.onDisconnect});
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF25D366).withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF25D366).withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Color(0xFF25D366), size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    connection.phoneNumber ?? connection.phoneNumberId ?? 'Número conectado',
+                    style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 15),
+                  ),
+                  if (connection.wabaId != null)
+                    Text('WABA: ${connection.wabaId}',
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 16),
+      OutlinedButton.icon(
+        onPressed: onDisconnect,
+        icon: const Icon(Icons.link_off, size: 16, color: AppColors.danger),
+        label: const Text('Desconectar número',
+            style: TextStyle(color: AppColors.danger, fontSize: 13)),
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: AppColors.danger.withValues(alpha: 0.4)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        ),
+      ),
+    ],
+  );
+}
+
+// ── ERROR ──────────────────────────────────────────────────────────────────────
+
+class _ErrorText extends StatelessWidget {
+  final String message;
+  const _ErrorText({required this.message});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: AppColors.danger.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.error_outline, color: AppColors.danger, size: 16),
+        const SizedBox(width: 8),
+        Expanded(child: Text(message,
+            style: const TextStyle(color: AppColors.danger, fontSize: 12, height: 1.4))),
       ],
-    );
-  }
+    ),
+  );
 }

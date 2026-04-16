@@ -1,44 +1,58 @@
 import type { Request, Response } from 'express';
 import {
+  getAvailableAccounts,
   connectWhatsApp,
   getConnection,
   disconnectWhatsApp,
 } from './whatsapp-connect.service';
 
-// POST /api/whatsapp/connect
-// Recibe el code del Embedded Signup de Meta y completa la vinculación.
-// Body: { code, waba_id?, phone_number_id? }
-export async function connectController(req: Request, res: Response): Promise<void> {
-  const tenantId = req.user!.tenant_id;
-  const { code, waba_id, phone_number_id } = req.body;
+// GET /api/whatsapp/accounts?access_token=xxx
+// Recibe el token del usuario (obtenido por FB.login en el frontend).
+// Devuelve la lista de WABAs y números disponibles para elegir.
+export async function accountsController(req: Request, res: Response): Promise<void> {
+  const accessToken = req.query['access_token'] as string;
 
-  if (!code) {
-    res.status(400).json({ error: 'El campo code es requerido' });
+  if (!accessToken) {
+    res.status(400).json({ error: 'access_token requerido' });
     return;
   }
 
   try {
-    const connection = await connectWhatsApp(tenantId, { code, waba_id, phone_number_id });
-    res.status(200).json({ connection });
+    const accounts = await getAvailableAccounts(accessToken);
+    res.json({ accounts });
   } catch (err: any) {
-    const status  = err.statusCode ?? 500;
-    const message = err.message   ?? 'Error interno';
-    res.status(status).json({ error: message });
+    res.status(err.statusCode ?? 500).json({ error: err.message ?? 'Error interno' });
+  }
+}
+
+// POST /api/whatsapp/connect
+// El usuario ya eligió su número. Guarda la conexión.
+// Body: { access_token, waba_id, phone_number_id }
+export async function connectController(req: Request, res: Response): Promise<void> {
+  const tenantId = req.user!.tenant_id;
+  const { access_token, waba_id, phone_number_id } = req.body;
+
+  if (!access_token || !waba_id || !phone_number_id) {
+    res.status(400).json({ error: 'Faltan campos: access_token, waba_id, phone_number_id' });
+    return;
+  }
+
+  try {
+    const connection = await connectWhatsApp(tenantId, access_token, waba_id, phone_number_id);
+    res.json({ connection });
+  } catch (err: any) {
+    res.status(err.statusCode ?? 500).json({ error: err.message ?? 'Error interno' });
   }
 }
 
 // GET /api/whatsapp/connection
-// Devuelve el estado de la conexión de WhatsApp del tenant.
 export async function statusController(req: Request, res: Response): Promise<void> {
-  const tenantId = req.user!.tenant_id;
-  const connection = await getConnection(tenantId);
+  const connection = await getConnection(req.user!.tenant_id);
   res.json({ connection: connection ?? null });
 }
 
 // DELETE /api/whatsapp/connection
-// Desconecta el número de WhatsApp del tenant (marca como inactive).
 export async function disconnectController(req: Request, res: Response): Promise<void> {
-  const tenantId = req.user!.tenant_id;
-  await disconnectWhatsApp(tenantId);
+  await disconnectWhatsApp(req.user!.tenant_id);
   res.json({ ok: true });
 }
