@@ -149,8 +149,14 @@ export async function disconnectWhatsApp(tenantId: string): Promise<void> {
 
 async function exchangeCode(code: string, appId: string, appSecret: string): Promise<string> {
   const params = new URLSearchParams({ client_id: appId, client_secret: appSecret, code });
-  const res  = await fetch(`${GRAPH}/oauth/access_token?${params}`);
-  const data = await res.json() as { access_token?: string; error?: { message: string } };
+  const url = `${GRAPH}/oauth/access_token?${params}`;
+  console.log('[WhatsApp] exchangeCode → POST', url.replace(appSecret, '***'));
+
+  const res  = await fetch(url);
+  const data = await res.json() as { access_token?: string; error?: { message: string; code?: number; type?: string } };
+
+  console.log('[WhatsApp] exchangeCode ← status:', res.status, 'body:', JSON.stringify(data));
+
   if (!res.ok || !data.access_token) {
     throw { statusCode: 400, message: data.error?.message ?? 'Error al intercambiar el code con Meta' };
   }

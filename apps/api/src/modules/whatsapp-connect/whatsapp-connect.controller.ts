@@ -23,6 +23,7 @@ export async function accountsController(req: Request, res: Response): Promise<v
     const result = await getAvailableAccounts(code);
     res.json(result);
   } catch (err: any) {
+    console.error('[WhatsApp] accountsController error:', err);
     res.status(err.statusCode ?? 500).json({ error: err.message ?? 'Error interno' });
   }
 }

@@ -132,9 +132,12 @@
     window.kairoLoginMeta = function() {
       return new Promise(function(resolve, reject) {
         FB.login(function(response) {
+          console.log('[AXIIA] FB.login response:', JSON.stringify(response));
           if (response.authResponse && response.authResponse.code) {
+            console.log('[AXIIA] code recibido:', response.authResponse.code.substring(0, 20) + '...');
             resolve({ code: response.authResponse.code });
           } else {
+            console.warn('[AXIIA] Sin code. status:', response.status, 'authResponse:', response.authResponse);
             reject(new Error(
               response.status === 'unknown'
                 ? 'Cancelaste la conexión con Meta'
