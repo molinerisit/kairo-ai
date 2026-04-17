@@ -132,8 +132,8 @@
     window.kairoLoginMeta = function() {
       return new Promise(function(resolve, reject) {
         FB.login(function(response) {
-          if (response.authResponse && response.authResponse.accessToken) {
-            resolve({ access_token: response.authResponse.accessToken });
+          if (response.authResponse && response.authResponse.code) {
+            resolve({ code: response.authResponse.code });
           } else {
             reject(new Error(
               response.status === 'unknown'
@@ -142,7 +142,9 @@
             ));
           }
         }, {
-          config_id: '3151393411723442',
+          config_id:     '3151393411723442',
+          response_type: 'code',
+          override_default_response_type: true,
         });
       });
     };

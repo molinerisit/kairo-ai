@@ -1,6 +1,9 @@
+import { randomUUID } from 'crypto';
 import { query } from '../../shared/db/pool';
+import { env } from '../../config/env';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
+const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutos
 
 // ── TIPOS ─────────────────────────────────────────────────────────────────────
 
@@ -23,28 +26,55 @@ export interface PhoneNumberOption {
   waba_name:            string;
 }
 
+// ── SESSION STORE (in-memory, single instance) ────────────────────────────────
+// Guarda el access_token temporalmente entre el paso de picker y el de connect.
+// El token nunca sale del backend hacia el cliente.
+
+const sessionStore = new Map<string, { token: string; expiresAt: number }>();
+
+function storeSession(token: string): string {
+  const id = randomUUID();
+  sessionStore.set(id, { token, expiresAt: Date.now() + SESSION_TTL_MS });
+  return id;
+}
+
+function consumeSession(sessionId: string): string {
+  const entry = sessionStore.get(sessionId);
+  if (!entry) throw { statusCode: 400, message: 'Sesión expirada o inválida. Volvé a conectar con Meta.' };
+  if (Date.now() > entry.expiresAt) {
+    sessionStore.delete(sessionId);
+    throw { statusCode: 400, message: 'Sesión expirada. Volvé a conectar con Meta.' };
+  }
+  sessionStore.delete(sessionId); // uso único
+  return entry.token;
+}
+
 // ── GET AVAILABLE ACCOUNTS ────────────────────────────────────────────────────
-// Recibe el access_token del usuario (desde FB.login en el frontend).
-// Devuelve todos los números de WhatsApp accesibles en sus WABAs.
+// 1. Intercambia el code de OAuth por un access token (server-side, nunca al cliente)
+// 2. Fetchea WABAs y números del usuario
+// 3. Devuelve los números disponibles + un session_id para el paso de connect
 
-export async function getAvailableAccounts(accessToken: string): Promise<PhoneNumberOption[]> {
-  // 1. Obtener businesses del usuario
-  const bizRes  = await graphGet('/me/businesses', accessToken, 'id,name,owned_whatsapp_business_accounts{id,name}');
-  const bizData = bizRes as any;
+export async function getAvailableAccounts(code: string): Promise<{
+  accounts:   PhoneNumberOption[];
+  session_id: string;
+}> {
+  const appId     = env.META_APP_ID;
+  const appSecret = env.META_APP_SECRET;
+  if (!appId || !appSecret) throw { statusCode: 500, message: 'META_APP_ID o META_APP_SECRET no configurados' };
 
+  // 1. Intercambiar code por access token
+  const token = await exchangeCode(code, appId, appSecret);
+
+  // 2. Fetchear businesses → WABAs → números
+  const bizRes = await graphGet('/me/businesses', token, 'id,name,owned_whatsapp_business_accounts{id,name}');
+  const businesses: any[] = (bizRes as any)?.data ?? [];
   const numbers: PhoneNumberOption[] = [];
-
-  const businesses: any[] = bizData?.data ?? [];
 
   for (const biz of businesses) {
     const wabas: any[] = biz.owned_whatsapp_business_accounts?.data ?? [];
-
     for (const waba of wabas) {
-      // 2. Por cada WABA, traer sus números
-      const phoneRes  = await graphGet(`/${waba.id}/phone_numbers`, accessToken, 'id,display_phone_number,verified_name');
-      const phoneData = phoneRes as any;
-
-      for (const phone of (phoneData?.data ?? [])) {
+      const phoneRes = await graphGet(`/${waba.id}/phone_numbers`, token, 'id,display_phone_number,verified_name');
+      for (const phone of (phoneRes as any)?.data ?? []) {
         numbers.push({
           phone_number_id:      phone.id,
           display_phone_number: phone.display_phone_number,
@@ -56,26 +86,27 @@ export async function getAvailableAccounts(accessToken: string): Promise<PhoneNu
     }
   }
 
-  return numbers;
+  // 3. Guardar token en sesión temporal (el cliente solo recibe el session_id)
+  const session_id = storeSession(token);
+  return { accounts: numbers, session_id };
 }
 
 // ── CONNECT ───────────────────────────────────────────────────────────────────
-// Guarda la conexión elegida por el usuario y suscribe la app al WABA.
+// Recupera el token por session_id, suscribe el WABA y guarda la conexión.
 
 export async function connectWhatsApp(
   tenantId:      string,
-  accessToken:   string,
+  sessionId:     string,
   wabaId:        string,
   phoneNumberId: string,
 ): Promise<WhatsAppConnection> {
-  // Traer el número de display
-  const phoneRes  = await graphGet(`/${phoneNumberId}`, accessToken, 'display_phone_number');
+  const token = consumeSession(sessionId);
+
+  const phoneRes   = await graphGet(`/${phoneNumberId}`, token, 'display_phone_number');
   const displayPhone = (phoneRes as any)?.display_phone_number ?? null;
 
-  // Suscribir la app al WABA para recibir webhooks de este tenant
-  await subscribeAppToWaba(wabaId, accessToken);
+  await subscribeAppToWaba(wabaId, token);
 
-  // Upsert: un tenant = una conexión activa
   const result = await query<WhatsAppConnection>(
     `INSERT INTO whatsapp_connections
        (tenant_id, waba_id, phone_number_id, phone_number, access_token, status)
@@ -88,7 +119,7 @@ export async function connectWhatsApp(
        status          = 'active',
        updated_at      = now()
      RETURNING id, tenant_id, waba_id, phone_number_id, phone_number, status, created_at, updated_at`,
-    [tenantId, wabaId, phoneNumberId, displayPhone, accessToken],
+    [tenantId, wabaId, phoneNumberId, displayPhone, token],
   );
 
   return result.rows[0];
@@ -115,6 +146,16 @@ export async function disconnectWhatsApp(tenantId: string): Promise<void> {
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
+
+async function exchangeCode(code: string, appId: string, appSecret: string): Promise<string> {
+  const params = new URLSearchParams({ client_id: appId, client_secret: appSecret, code });
+  const res  = await fetch(`${GRAPH}/oauth/access_token?${params}`);
+  const data = await res.json() as { access_token?: string; error?: { message: string } };
+  if (!res.ok || !data.access_token) {
+    throw { statusCode: 400, message: data.error?.message ?? 'Error al intercambiar el code con Meta' };
+  }
+  return data.access_token;
+}
 
 async function graphGet(path: string, token: string, fields?: string): Promise<unknown> {
   const params = new URLSearchParams({ access_token: token });

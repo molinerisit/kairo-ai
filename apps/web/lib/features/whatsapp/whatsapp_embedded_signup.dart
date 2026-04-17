@@ -21,7 +21,7 @@ class _WhatsAppConnectSectionState extends State<WhatsAppConnectSection> {
   WhatsAppConnection?       _connection;
   List<PhoneNumberOption>   _options     = [];
   PhoneNumberOption?        _selected;
-  String?                   _accessToken;
+  String?                   _sessionId;
   _Step                     _step        = _Step.idle;
   bool                      _loading     = true;
   String?                   _error;
@@ -44,18 +44,19 @@ class _WhatsAppConnectSectionState extends State<WhatsAppConnectSection> {
     }
   }
 
-  // Paso 1: login con Meta → obtener access token
+  // Paso 1: login con Meta → obtener code → backend intercambia por token
   Future<void> _startLogin() async {
     setState(() { _step = _Step.logging; _error = null; });
     try {
       final result = await _loginMeta().toDart;
       final map    = result.dartify() as Map<Object?, Object?>?;
-      final token  = map?['access_token'] as String?;
+      final code   = map?['code'] as String?;
 
-      if (token == null) throw Exception('No se recibió token de Meta');
+      if (code == null) throw Exception('No se recibió code de Meta');
 
-      // Paso 2: fetchear WABAs y números
-      final options = await WhatsAppConnectService.getAccounts(token);
+      // Paso 2: backend intercambia code, fetchea WABAs y números
+      final (:accounts, :sessionId) = await WhatsAppConnectService.getAccounts(code);
+      final options = accounts;
 
       if (options.isEmpty) {
         throw Exception(
@@ -65,10 +66,10 @@ class _WhatsAppConnectSectionState extends State<WhatsAppConnectSection> {
       }
 
       setState(() {
-        _accessToken = token;
-        _options     = options;
-        _selected    = options.length == 1 ? options.first : null;
-        _step        = _Step.picking;
+        _sessionId = sessionId;
+        _options   = options;
+        _selected  = options.length == 1 ? options.first : null;
+        _step      = _Step.picking;
       });
     } catch (e) {
       setState(() {
@@ -80,11 +81,11 @@ class _WhatsAppConnectSectionState extends State<WhatsAppConnectSection> {
 
   // Paso 3: confirmar el número elegido
   Future<void> _confirmConnect() async {
-    if (_selected == null || _accessToken == null) return;
+    if (_selected == null || _sessionId == null) return;
     setState(() { _step = _Step.connecting; _error = null; });
     try {
       final conn = await WhatsAppConnectService.connect(
-        accessToken:   _accessToken!,
+        sessionId:     _sessionId!,
         wabaId:        _selected!.wabaId,
         phoneNumberId: _selected!.phoneNumberId,
       );
@@ -149,7 +150,7 @@ class _WhatsAppConnectSectionState extends State<WhatsAppConnectSection> {
               loading:   _step == _Step.connecting,
               onSelect:  (o) => setState(() => _selected = o),
               onConfirm: _step == _Step.connecting ? null : _confirmConnect,
-              onCancel:  () => setState(() { _step = _Step.idle; _options = []; _accessToken = null; }),
+              onCancel:  () => setState(() { _step = _Step.idle; _options = []; _sessionId = null; }),
             )
           else
             _DisconnectedView(

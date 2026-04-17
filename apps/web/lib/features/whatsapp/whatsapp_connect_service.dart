@@ -57,20 +57,24 @@ class WhatsAppConnectService {
     return WhatsAppConnection.fromJson(data['connection'] as Map<String, dynamic>);
   }
 
-  static Future<List<PhoneNumberOption>> getAccounts(String accessToken) async {
-    final data = await ApiClient.get('/api/whatsapp/accounts?access_token=$accessToken');
-    final list = data['accounts'] as List<dynamic>;
-    return list.map((e) => PhoneNumberOption.fromJson(e as Map<String, dynamic>)).toList();
+  // Manda el code al backend. El backend intercambia el token y devuelve
+  // la lista de números + un session_id temporal (el token nunca toca el cliente).
+  static Future<({List<PhoneNumberOption> accounts, String sessionId})> getAccounts(String code) async {
+    final data = await ApiClient.post('/api/whatsapp/accounts', body: {'code': code});
+    final list = (data['accounts'] as List<dynamic>)
+        .map((e) => PhoneNumberOption.fromJson(e as Map<String, dynamic>))
+        .toList();
+    return (accounts: list, sessionId: data['session_id'] as String);
   }
 
   static Future<WhatsAppConnection> connect({
-    required String accessToken,
+    required String sessionId,
     required String wabaId,
     required String phoneNumberId,
   }) async {
     final data = await ApiClient.post('/api/whatsapp/connect', body: {
-      'access_token':    accessToken,
-      'waba_id':         wabaId,
+      'session_id':     sessionId,
+      'waba_id':        wabaId,
       'phone_number_id': phoneNumberId,
     });
     return WhatsAppConnection.fromJson(data['connection'] as Map<String, dynamic>);
