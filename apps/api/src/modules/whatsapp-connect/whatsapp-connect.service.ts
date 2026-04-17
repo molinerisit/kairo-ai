@@ -1,9 +1,8 @@
-import { randomUUID } from 'crypto';
 import { query } from '../../shared/db/pool';
 import { env } from '../../config/env';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
-const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutos
+const SESSION_TTL_MS = 10 * 60 * 1000;
 
 // ── TIPOS ─────────────────────────────────────────────────────────────────────
 
@@ -26,119 +25,76 @@ export interface PhoneNumberOption {
   waba_name:            string;
 }
 
-// ── SESSION STORE (in-memory, single instance) ────────────────────────────────
-// Guarda el access_token temporalmente entre el paso de picker y el de connect.
-// El token nunca sale del backend hacia el cliente.
+// ── SESSION STORE ─────────────────────────────────────────────────────────────
+// El code de OAuth actúa como session key — nunca sale del servidor hacia el cliente.
 
 const sessionStore = new Map<string, { token: string; expiresAt: number }>();
 
-function storeSession(token: string): string {
-  const id = randomUUID();
-  sessionStore.set(id, { token, expiresAt: Date.now() + SESSION_TTL_MS });
-  return id;
+function storeSession(code: string, token: string): void {
+  sessionStore.set(code, { token, expiresAt: Date.now() + SESSION_TTL_MS });
 }
 
-function consumeSession(sessionId: string): string {
-  const entry = sessionStore.get(sessionId);
+function consumeSession(code: string): string {
+  const entry = sessionStore.get(code);
   if (!entry) throw { statusCode: 400, message: 'Sesión expirada o inválida. Volvé a conectar con Meta.' };
   if (Date.now() > entry.expiresAt) {
-    sessionStore.delete(sessionId);
+    sessionStore.delete(code);
     throw { statusCode: 400, message: 'Sesión expirada. Volvé a conectar con Meta.' };
   }
-  sessionStore.delete(sessionId); // uso único
+  sessionStore.delete(code);
   return entry.token;
 }
 
 // ── GET AVAILABLE ACCOUNTS ────────────────────────────────────────────────────
-// 1. Intercambia el code de OAuth por un access token (server-side, nunca al cliente)
-// 2. Fetchea WABAs y números del usuario
-// 3. Devuelve los números disponibles + un session_id para el paso de connect
+// 1. Intercambia el code por access_token (server-side, nunca al cliente)
+// 2. Descubre WABAs vía /me/whatsapp_business_accounts (no requiere App Review)
+// 3. Devuelve los números disponibles
 
-export async function getAvailableAccounts(input: { code?: string; access_token?: string; waba_id?: string }): Promise<{
-  accounts:   PhoneNumberOption[];
-  session_id: string;
-}> {
+export async function getAvailableAccounts(code: string): Promise<{ accounts: PhoneNumberOption[] }> {
   const appId     = env.META_APP_ID;
   const appSecret = env.META_APP_SECRET;
   if (!appId || !appSecret) throw { statusCode: 500, message: 'META_APP_ID o META_APP_SECRET no configurados' };
 
-  // Resolver token: si viene code lo intercambia, si viene accessToken lo usa directo
-  let token: string;
-  if (input.code) {
-    token = await exchangeCode(input.code, appId, appSecret);
-  } else if (input.access_token) {
-    token = input.access_token;
-  } else {
-    throw { statusCode: 400, message: 'Se requiere code o access_token' };
-  }
+  const token = await exchangeCode(code, appId, appSecret);
+  storeSession(code, token);
 
+  // Descubre WABAs a los que el usuario dio acceso durante el Embedded Signup
+  const wabaRes = await graphGet('/me/whatsapp_business_accounts', token, 'id,name');
+  console.log('[WhatsApp] /me/whatsapp_business_accounts →', JSON.stringify(wabaRes));
+
+  const wabas: any[] = (wabaRes as any)?.data ?? [];
   const numbers: PhoneNumberOption[] = [];
 
-  if (input.waba_id) {
-    // Ruta directa: el usuario proveyó su WABA ID — no necesita business_management
-    const wabaId = input.waba_id.trim();
-    const [phoneRes, wabaRes] = await Promise.all([
-      graphGet(`/${wabaId}/phone_numbers`, token, 'id,display_phone_number,verified_name'),
-      graphGet(`/${wabaId}`, token, 'id,name'),
-    ]);
-    console.log(`[WhatsApp] /${wabaId}/phone_numbers →`, JSON.stringify(phoneRes));
-
-    const wabaName = (wabaRes as any)?.name ?? wabaId;
+  for (const waba of wabas) {
+    const phoneRes = await graphGet(`/${waba.id}/phone_numbers`, token, 'id,display_phone_number,verified_name');
+    console.log(`[WhatsApp] /${waba.id}/phone_numbers →`, JSON.stringify(phoneRes));
     for (const phone of (phoneRes as any)?.data ?? []) {
       numbers.push({
         phone_number_id:      phone.id,
         display_phone_number: phone.display_phone_number,
-        verified_name:        phone.verified_name ?? wabaName,
-        waba_id:              wabaId,
-        waba_name:            wabaName,
+        verified_name:        phone.verified_name ?? waba.name,
+        waba_id:              waba.id,
+        waba_name:            waba.name,
       });
-    }
-
-    if ((phoneRes as any)?.error) {
-      const msg = (phoneRes as any).error?.message ?? 'WABA no encontrado o sin acceso';
-      throw { statusCode: 400, message: msg };
-    }
-  } else {
-    // Ruta alternativa: enumerar vía /me/businesses (requiere App Review de Meta)
-    const bizRes = await graphGet('/me/businesses', token, 'id,name,owned_whatsapp_business_accounts{id,name}');
-    console.log('[WhatsApp] /me/businesses →', JSON.stringify(bizRes));
-
-    const businesses: any[] = (bizRes as any)?.data ?? [];
-    for (const biz of businesses) {
-      const wabas: any[] = biz.owned_whatsapp_business_accounts?.data ?? [];
-      for (const waba of wabas) {
-        const phoneRes = await graphGet(`/${waba.id}/phone_numbers`, token, 'id,display_phone_number,verified_name');
-        for (const phone of (phoneRes as any)?.data ?? []) {
-          numbers.push({
-            phone_number_id:      phone.id,
-            display_phone_number: phone.display_phone_number,
-            verified_name:        phone.verified_name ?? biz.name,
-            waba_id:              waba.id,
-            waba_name:            waba.name ?? biz.name,
-          });
-        }
-      }
     }
   }
 
   console.log('[WhatsApp] números encontrados:', numbers.length);
-
-  const session_id = storeSession(token);
-  return { accounts: numbers, session_id };
+  return { accounts: numbers };
 }
 
 // ── CONNECT ───────────────────────────────────────────────────────────────────
-// Recupera el token por session_id, suscribe el WABA y guarda la conexión.
+// Recupera el token por code, suscribe el WABA y guarda la conexión.
 
 export async function connectWhatsApp(
   tenantId:      string,
-  sessionId:     string,
+  code:          string,
   wabaId:        string,
   phoneNumberId: string,
 ): Promise<WhatsAppConnection> {
-  const token = consumeSession(sessionId);
+  const token = consumeSession(code);
 
-  const phoneRes   = await graphGet(`/${phoneNumberId}`, token, 'display_phone_number');
+  const phoneRes    = await graphGet(`/${phoneNumberId}`, token, 'display_phone_number');
   const displayPhone = (phoneRes as any)?.display_phone_number ?? null;
 
   await subscribeAppToWaba(wabaId, token);
@@ -189,8 +145,7 @@ async function exchangeCode(code: string, appId: string, appSecret: string): Pro
   console.log('[WhatsApp] exchangeCode → POST', url.replace(appSecret, '***'));
 
   const res  = await fetch(url);
-  const data = await res.json() as { access_token?: string; error?: { message: string; code?: number; type?: string } };
-
+  const data = await res.json() as { access_token?: string; error?: { message: string } };
   console.log('[WhatsApp] exchangeCode ← status:', res.status, 'body:', JSON.stringify(data));
 
   if (!res.ok || !data.access_token) {

@@ -8,19 +8,17 @@ import {
 
 // POST /api/whatsapp/accounts
 // Body: { code }
-// El frontend manda el code de OAuth. El backend lo intercambia por un token,
-// fetchea los números disponibles y devuelve { accounts, session_id }.
-// El access_token nunca sale del servidor.
+// Intercambia el code por token, descubre WABAs y devuelve los números disponibles.
 export async function accountsController(req: Request, res: Response): Promise<void> {
-  const { code, access_token, waba_id } = req.body;
+  const { code } = req.body;
 
-  if (!code && !access_token) {
-    res.status(400).json({ error: 'Se requiere code o access_token' });
+  if (!code) {
+    res.status(400).json({ error: 'Se requiere code' });
     return;
   }
 
   try {
-    const result = await getAvailableAccounts({ code, access_token, waba_id });
+    const result = await getAvailableAccounts(code);
     res.json(result);
   } catch (err: any) {
     console.error('[WhatsApp] accountsController error:', err);
@@ -29,18 +27,18 @@ export async function accountsController(req: Request, res: Response): Promise<v
 }
 
 // POST /api/whatsapp/connect
-// Body: { session_id, waba_id, phone_number_id }
+// Body: { code, waba_id, phone_number_id }
 export async function connectController(req: Request, res: Response): Promise<void> {
   const tenantId = req.user!.tenant_id;
-  const { session_id, waba_id, phone_number_id } = req.body;
+  const { code, waba_id, phone_number_id } = req.body;
 
-  if (!session_id || !waba_id || !phone_number_id) {
-    res.status(400).json({ error: 'Faltan campos: session_id, waba_id, phone_number_id' });
+  if (!code) {
+    res.status(400).json({ error: 'Se requiere code' });
     return;
   }
 
   try {
-    const connection = await connectWhatsApp(tenantId, session_id, waba_id, phone_number_id);
+    const connection = await connectWhatsApp(tenantId, code, waba_id, phone_number_id);
     res.json({ connection });
   } catch (err: any) {
     res.status(err.statusCode ?? 500).json({ error: err.message ?? 'Error interno' });
