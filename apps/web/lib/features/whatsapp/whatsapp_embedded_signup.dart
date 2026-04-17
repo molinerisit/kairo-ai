@@ -6,9 +6,12 @@ import '../../shared/theme/app_theme.dart';
 @JS('kairoLoginMeta')
 external JSPromise<JSObject> _loginMeta();
 
+@JS('window.open')
+external void _openUrl(JSString url, JSString target);
+
 // ── ESTADOS DEL FLUJO ─────────────────────────────────────────────────────────
 
-enum _Step { idle, logging, picking, connecting, done }
+enum _Step { idle, logging, picking, connecting, done, noWaba }
 
 class WhatsAppConnectSection extends StatefulWidget {
   const WhatsAppConnectSection({super.key});
@@ -63,10 +66,8 @@ class _WhatsAppConnectSectionState extends State<WhatsAppConnectSection> {
       final options = accounts;
 
       if (options.isEmpty) {
-        throw Exception(
-          'No encontramos números de WhatsApp Business en tu cuenta de Meta.\n'
-          'Asegurate de tener un WABA y al menos un número registrado.',
-        );
+        setState(() { _step = _Step.noWaba; });
+        return;
       }
 
       setState(() {
@@ -147,6 +148,10 @@ class _WhatsAppConnectSectionState extends State<WhatsAppConnectSection> {
                 child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)))
           else if (_connection != null && _connection!.isActive && _step != _Step.picking)
             _ConnectedView(connection: _connection!, onDisconnect: _disconnect)
+          else if (_step == _Step.noWaba)
+            _NoWabaView(
+              onRetry: () => setState(() { _step = _Step.idle; _error = null; }),
+            )
           else if (_step == _Step.picking)
             _PickerView(
               options:   _options,
@@ -428,6 +433,116 @@ class _ConnectedView extends StatelessWidget {
         ),
       ),
     ],
+  );
+}
+
+// ── VISTA: SIN WABA ────────────────────────────────────────────────────────────
+
+class _NoWabaView extends StatelessWidget {
+  final VoidCallback onRetry;
+  const _NoWabaView({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+        ),
+        child: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(Icons.info_outline, color: AppColors.primary, size: 16),
+              SizedBox(width: 8),
+              Text('No encontramos números en tu cuenta',
+                  style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
+            ]),
+            SizedBox(height: 10),
+            Text(
+              'Para usar WhatsApp Business en AXIIA necesitás:\n'
+              '1. Una cuenta de Meta Business Manager\n'
+              '2. Un WhatsApp Business Account (WABA)\n'
+              '3. Un número de teléfono registrado en ese WABA',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.6),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 16),
+      const Text('Seguí estos pasos para configurarlo:',
+          style: TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 12),
+      _StepItem(number: '1', text: 'Creá tu cuenta en Meta Business Manager'),
+      _StepItem(number: '2', text: 'Dentro de Business Manager, creá un WhatsApp Business Account'),
+      _StepItem(number: '3', text: 'Agregá y verificá tu número de teléfono'),
+      _StepItem(number: '4', text: 'Volvé acá y hacé clic en "Reintentar"'),
+      const SizedBox(height: 20),
+      Row(children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () => _launchUrl('https://business.facebook.com'),
+            icon: const Icon(Icons.open_in_new, size: 14),
+            label: const Text('Abrir Business Manager', style: TextStyle(fontSize: 13)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5)),
+              padding: const EdgeInsets.symmetric(vertical: 11),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: FilledButton(
+            onPressed: onRetry,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 11),
+            ),
+            child: const Text('Reintentar', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          ),
+        ),
+      ]),
+    ],
+  );
+
+  void _launchUrl(String url) {
+    _openUrl(url.toJS, '_blank'.toJS);
+  }
+}
+
+class _StepItem extends StatelessWidget {
+  final String number;
+  final String text;
+  const _StepItem({required this.number, required this.text});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 20, height: 20,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.15),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(number,
+                style: const TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w700)),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: Text(text,
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4))),
+      ],
+    ),
   );
 }
 
