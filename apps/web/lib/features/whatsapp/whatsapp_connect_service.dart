@@ -59,8 +59,14 @@ class WhatsAppConnectService {
 
   // Manda el code al backend. El backend intercambia el token y devuelve
   // la lista de números + un session_id temporal (el token nunca toca el cliente).
-  static Future<({List<PhoneNumberOption> accounts, String sessionId})> getAccounts(String code) async {
-    final data = await ApiClient.post('/api/whatsapp/accounts', body: {'code': code});
+  static Future<({List<PhoneNumberOption> accounts, String sessionId})> getAccounts({
+    String? code,
+    String? accessToken,
+  }) async {
+    final body = <String, dynamic>{};
+    if (code        != null) body['code']         = code;
+    if (accessToken != null) body['access_token'] = accessToken;
+    final data = await ApiClient.post('/api/whatsapp/accounts', body: body);
     final list = (data['accounts'] as List<dynamic>)
         .map((e) => PhoneNumberOption.fromJson(e as Map<String, dynamic>))
         .toList();

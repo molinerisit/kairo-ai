@@ -133,11 +133,14 @@
       return new Promise(function(resolve, reject) {
         FB.login(function(response) {
           console.log('[AXIIA] FB.login response:', JSON.stringify(response));
-          if (response.authResponse && response.authResponse.code) {
-            console.log('[AXIIA] code recibido:', response.authResponse.code.substring(0, 20) + '...');
-            resolve({ code: response.authResponse.code });
+          var auth = response.authResponse;
+          if (auth && (auth.code || auth.accessToken)) {
+            resolve({
+              code:         auth.code         || null,
+              access_token: auth.accessToken  || null,
+            });
           } else {
-            console.warn('[AXIIA] Sin code. status:', response.status, 'authResponse:', response.authResponse);
+            console.warn('[AXIIA] Sin credencial. status:', response.status);
             reject(new Error(
               response.status === 'unknown'
                 ? 'Cancelaste la conexión con Meta'
@@ -145,9 +148,7 @@
             ));
           }
         }, {
-          config_id:     '3151393411723442',
-          response_type: 'code',
-          override_default_response_type: true,
+          config_id: '3151393411723442',
         });
       });
     };

@@ -54,7 +54,7 @@ function consumeSession(sessionId: string): string {
 // 2. Fetchea WABAs y números del usuario
 // 3. Devuelve los números disponibles + un session_id para el paso de connect
 
-export async function getAvailableAccounts(code: string): Promise<{
+export async function getAvailableAccounts(input: { code?: string; access_token?: string }): Promise<{
   accounts:   PhoneNumberOption[];
   session_id: string;
 }> {
@@ -62,8 +62,16 @@ export async function getAvailableAccounts(code: string): Promise<{
   const appSecret = env.META_APP_SECRET;
   if (!appId || !appSecret) throw { statusCode: 500, message: 'META_APP_ID o META_APP_SECRET no configurados' };
 
-  // 1. Intercambiar code por access token
-  const token = await exchangeCode(code, appId, appSecret);
+  // Resolver token: si viene code lo intercambia, si viene accessToken lo usa directo
+  let token: string;
+  if (input.code) {
+    token = await exchangeCode(input.code, appId, appSecret);
+  } else if (input.access_token) {
+    console.log('[WhatsApp] usando accessToken directo del popup');
+    token = input.access_token;
+  } else {
+    throw { statusCode: 400, message: 'Se requiere code o access_token' };
+  }
 
   // 2. Fetchear businesses → WABAs → números
   const bizRes = await graphGet('/me/businesses', token, 'id,name,owned_whatsapp_business_accounts{id,name}');

@@ -12,15 +12,15 @@ import {
 // fetchea los números disponibles y devuelve { accounts, session_id }.
 // El access_token nunca sale del servidor.
 export async function accountsController(req: Request, res: Response): Promise<void> {
-  const { code } = req.body;
+  const { code, access_token } = req.body;
 
-  if (!code) {
-    res.status(400).json({ error: 'El campo code es requerido' });
+  if (!code && !access_token) {
+    res.status(400).json({ error: 'Se requiere code o access_token' });
     return;
   }
 
   try {
-    const result = await getAvailableAccounts(code);
+    const result = await getAvailableAccounts({ code, access_token });
     res.json(result);
   } catch (err: any) {
     console.error('[WhatsApp] accountsController error:', err);

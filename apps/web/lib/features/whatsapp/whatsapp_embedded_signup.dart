@@ -48,14 +48,18 @@ class _WhatsAppConnectSectionState extends State<WhatsAppConnectSection> {
   Future<void> _startLogin() async {
     setState(() { _step = _Step.logging; _error = null; });
     try {
-      final result = await _loginMeta().toDart;
-      final map    = result.dartify() as Map<Object?, Object?>?;
-      final code   = map?['code'] as String?;
+      final result      = await _loginMeta().toDart;
+      final map         = result.dartify() as Map<Object?, Object?>?;
+      final code        = map?['code']         as String?;
+      final accessToken = map?['access_token'] as String?;
 
-      if (code == null) throw Exception('No se recibió code de Meta');
+      if (code == null && accessToken == null) throw Exception('Meta no devolvió credencial de autorización');
 
-      // Paso 2: backend intercambia code, fetchea WABAs y números
-      final (:accounts, :sessionId) = await WhatsAppConnectService.getAccounts(code);
+      // Paso 2: backend resuelve token y fetchea WABAs y números
+      final (:accounts, :sessionId) = await WhatsAppConnectService.getAccounts(
+        code: code,
+        accessToken: accessToken,
+      );
       final options = accounts;
 
       if (options.isEmpty) {
