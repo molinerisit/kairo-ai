@@ -132,15 +132,16 @@
     window.kairoLoginMeta = function() {
       return new Promise(function(resolve, reject) {
         FB.login(function(response) {
-          console.log('[AXIIA] FB.login response:', JSON.stringify(response));
+          console.log('[AXIIA] FB.login response completo:', JSON.stringify(response));
           var auth = response.authResponse;
+          console.log('[AXIIA] authResponse keys:', auth ? Object.keys(auth) : 'null');
           if (auth && (auth.code || auth.accessToken)) {
             resolve({
-              code:         auth.code         || null,
-              access_token: auth.accessToken  || null,
+              code:         auth.code        || null,
+              access_token: auth.accessToken || null,
             });
           } else {
-            console.warn('[AXIIA] Sin credencial. status:', response.status);
+            console.warn('[AXIIA] Sin credencial. status:', response.status, 'auth:', auth);
             reject(new Error(
               response.status === 'unknown'
                 ? 'Cancelaste la conexión con Meta'
@@ -148,7 +149,9 @@
             ));
           }
         }, {
-          config_id: '3151393411723442',
+          config_id:    '3151393411723442',
+          response_type: 'code',
+          override_default_response_type: true,
         });
       });
     };
