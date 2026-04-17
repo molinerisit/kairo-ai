@@ -54,7 +54,7 @@ function consumeSession(sessionId: string): string {
 // 2. Fetchea WABAs y números del usuario
 // 3. Devuelve los números disponibles + un session_id para el paso de connect
 
-export async function getAvailableAccounts(input: { code?: string; access_token?: string }): Promise<{
+export async function getAvailableAccounts(input: { code?: string; access_token?: string; waba_id?: string }): Promise<{
   accounts:   PhoneNumberOption[];
   session_id: string;
 }> {
@@ -67,39 +67,62 @@ export async function getAvailableAccounts(input: { code?: string; access_token?
   if (input.code) {
     token = await exchangeCode(input.code, appId, appSecret);
   } else if (input.access_token) {
-    console.log('[WhatsApp] usando accessToken directo del popup');
     token = input.access_token;
   } else {
     throw { statusCode: 400, message: 'Se requiere code o access_token' };
   }
 
-  // 2. Fetchear businesses → WABAs → números
-  const bizRes = await graphGet('/me/businesses', token, 'id,name,owned_whatsapp_business_accounts{id,name}');
-  console.log('[WhatsApp] /me/businesses →', JSON.stringify(bizRes));
-
-  const businesses: any[] = (bizRes as any)?.data ?? [];
   const numbers: PhoneNumberOption[] = [];
 
-  for (const biz of businesses) {
-    const wabas: any[] = biz.owned_whatsapp_business_accounts?.data ?? [];
-    for (const waba of wabas) {
-      const phoneRes = await graphGet(`/${waba.id}/phone_numbers`, token, 'id,display_phone_number,verified_name');
-      console.log(`[WhatsApp] /${waba.id}/phone_numbers →`, JSON.stringify(phoneRes));
-      for (const phone of (phoneRes as any)?.data ?? []) {
-        numbers.push({
-          phone_number_id:      phone.id,
-          display_phone_number: phone.display_phone_number,
-          verified_name:        phone.verified_name ?? biz.name,
-          waba_id:              waba.id,
-          waba_name:            waba.name ?? biz.name,
-        });
+  if (input.waba_id) {
+    // Ruta directa: el usuario proveyó su WABA ID — no necesita business_management
+    const wabaId = input.waba_id.trim();
+    const [phoneRes, wabaRes] = await Promise.all([
+      graphGet(`/${wabaId}/phone_numbers`, token, 'id,display_phone_number,verified_name'),
+      graphGet(`/${wabaId}`, token, 'id,name'),
+    ]);
+    console.log(`[WhatsApp] /${wabaId}/phone_numbers →`, JSON.stringify(phoneRes));
+
+    const wabaName = (wabaRes as any)?.name ?? wabaId;
+    for (const phone of (phoneRes as any)?.data ?? []) {
+      numbers.push({
+        phone_number_id:      phone.id,
+        display_phone_number: phone.display_phone_number,
+        verified_name:        phone.verified_name ?? wabaName,
+        waba_id:              wabaId,
+        waba_name:            wabaName,
+      });
+    }
+
+    if ((phoneRes as any)?.error) {
+      const msg = (phoneRes as any).error?.message ?? 'WABA no encontrado o sin acceso';
+      throw { statusCode: 400, message: msg };
+    }
+  } else {
+    // Ruta alternativa: enumerar vía /me/businesses (requiere App Review de Meta)
+    const bizRes = await graphGet('/me/businesses', token, 'id,name,owned_whatsapp_business_accounts{id,name}');
+    console.log('[WhatsApp] /me/businesses →', JSON.stringify(bizRes));
+
+    const businesses: any[] = (bizRes as any)?.data ?? [];
+    for (const biz of businesses) {
+      const wabas: any[] = biz.owned_whatsapp_business_accounts?.data ?? [];
+      for (const waba of wabas) {
+        const phoneRes = await graphGet(`/${waba.id}/phone_numbers`, token, 'id,display_phone_number,verified_name');
+        for (const phone of (phoneRes as any)?.data ?? []) {
+          numbers.push({
+            phone_number_id:      phone.id,
+            display_phone_number: phone.display_phone_number,
+            verified_name:        phone.verified_name ?? biz.name,
+            waba_id:              waba.id,
+            waba_name:            waba.name ?? biz.name,
+          });
+        }
       }
     }
   }
 
   console.log('[WhatsApp] números encontrados:', numbers.length);
 
-  // 3. Guardar token en sesión temporal (el cliente solo recibe el session_id)
   const session_id = storeSession(token);
   return { accounts: numbers, session_id };
 }

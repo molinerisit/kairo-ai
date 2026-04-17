@@ -126,32 +126,26 @@
       d.head.appendChild(js);
     }(document, 'script', 'facebook-jssdk'));
 
-    // kairoLoginMeta: abre el popup de Facebook Login con permisos de WhatsApp Business.
-    // Devuelve una Promise con { access_token } para que Flutter pueda fetchear
-    // los WABAs y números del usuario y mostrarle un picker.
-    window.kairoLoginMeta = function() {
+    window.kairoStartWhatsAppSignup = function() {
       return new Promise(function(resolve, reject) {
+        if (typeof FB === 'undefined') {
+          reject(new Error('Facebook SDK no cargó'));
+          return;
+        }
         FB.login(function(response) {
-          console.log('[AXIIA] FB.login response completo:', JSON.stringify(response));
-          var auth = response.authResponse;
-          console.log('[AXIIA] authResponse keys:', auth ? Object.keys(auth) : 'null');
-          if (auth && (auth.code || auth.accessToken)) {
+          if (response && response.authResponse) {
             resolve({
-              code:         auth.code        || null,
-              access_token: auth.accessToken || null,
+              code:        response.authResponse.code        || null,
+              accessToken: response.authResponse.accessToken || null,
             });
           } else {
-            console.warn('[AXIIA] Sin credencial. status:', response.status, 'auth:', auth);
-            reject(new Error(
-              response.status === 'unknown'
-                ? 'Cancelaste la conexión con Meta'
-                : 'No se pudo obtener autorización de Meta'
-            ));
+            reject(new Error('Login cancelado o sin authResponse'));
           }
         }, {
-          scope: 'whatsapp_business_management,business_management,whatsapp_business_messaging',
-          response_type: 'code',
+          config_id:                     '3151393411723442',
+          response_type:                 'code',
           override_default_response_type: true,
+          scope: 'whatsapp_business_management,whatsapp_business_messaging',
         });
       });
     };

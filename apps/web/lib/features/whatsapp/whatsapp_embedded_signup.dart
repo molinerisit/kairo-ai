@@ -3,15 +3,15 @@ import 'package:flutter/material.dart';
 import 'whatsapp_connect_service.dart';
 import '../../shared/theme/app_theme.dart';
 
-@JS('kairoLoginMeta')
-external JSPromise<JSObject> _loginMeta();
+@JS('kairoStartWhatsAppSignup')
+external JSPromise<JSObject> _startWhatsAppSignup();
 
 @JS('window.open')
 external void _openUrl(JSString url, JSString target);
 
 // ── ESTADOS DEL FLUJO ─────────────────────────────────────────────────────────
 
-enum _Step { idle, logging, picking, connecting, done, noWaba }
+enum _Step { idle, logging, enterWaba, picking, connecting, done, noWaba }
 
 class WhatsAppConnectSection extends StatefulWidget {
   const WhatsAppConnectSection({super.key});
@@ -25,9 +25,18 @@ class _WhatsAppConnectSectionState extends State<WhatsAppConnectSection> {
   List<PhoneNumberOption>   _options     = [];
   PhoneNumberOption?        _selected;
   String?                   _sessionId;
+  String?                   _code;
+  String?                   _accessToken;
   _Step                     _step        = _Step.idle;
   bool                      _loading     = true;
   String?                   _error;
+  final _wabaController = TextEditingController();
+
+  @override
+  void dispose() {
+    _wabaController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -47,39 +56,55 @@ class _WhatsAppConnectSectionState extends State<WhatsAppConnectSection> {
     }
   }
 
-  // Paso 1: login con Meta → obtener code → backend intercambia por token
+  // Paso 1: login con Meta → obtener code (o accessToken) → pedir WABA ID
   Future<void> _startLogin() async {
     setState(() { _step = _Step.logging; _error = null; });
     try {
-      final result      = await _loginMeta().toDart;
-      final map         = result.dartify() as Map<Object?, Object?>?;
-      final code        = map?['code']         as String?;
-      final accessToken = map?['access_token'] as String?;
-
-      if (code == null && accessToken == null) throw Exception('Meta no devolvió credencial de autorización');
-
-      // Paso 2: backend resuelve token y fetchea WABAs y números
-      final (:accounts, :sessionId) = await WhatsAppConnectService.getAccounts(
-        code: code,
-        accessToken: accessToken,
-      );
-      final options = accounts;
-
-      if (options.isEmpty) {
-        setState(() { _step = _Step.noWaba; });
-        return;
+      final result = await _startWhatsAppSignup().toDart;
+      final map    = result.dartify() as Map<Object?, Object?>?;
+      final code        = map?['code']        as String?;
+      final accessToken = map?['accessToken'] as String?;
+      if (code == null && accessToken == null) {
+        throw Exception('Meta no devolvió credencial de autorización');
       }
-
       setState(() {
-        _sessionId = sessionId;
-        _options   = options;
-        _selected  = options.length == 1 ? options.first : null;
-        _step      = _Step.picking;
+        _code        = code;
+        _accessToken = accessToken;
+        _step        = _Step.enterWaba;
       });
     } catch (e) {
       setState(() {
         _error = e.toString().replaceFirst('Exception: ', '');
         _step  = _Step.idle;
+      });
+    }
+  }
+
+  // Paso 2: backend usa token + WABA ID para buscar números
+  Future<void> _fetchPhones() async {
+    final wabaId = _wabaController.text.trim();
+    if (wabaId.isEmpty) return;
+    setState(() { _step = _Step.logging; _error = null; });
+    try {
+      final (:accounts, :sessionId) = await WhatsAppConnectService.getAccounts(
+        code:        _code,
+        accessToken: _accessToken,
+        wabaId:      wabaId,
+      );
+      if (accounts.isEmpty) {
+        setState(() { _step = _Step.noWaba; });
+        return;
+      }
+      setState(() {
+        _sessionId = sessionId;
+        _options   = accounts;
+        _selected  = accounts.length == 1 ? accounts.first : null;
+        _step      = _Step.picking;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _step  = _Step.enterWaba;
       });
     }
   }
@@ -150,7 +175,13 @@ class _WhatsAppConnectSectionState extends State<WhatsAppConnectSection> {
             _ConnectedView(connection: _connection!, onDisconnect: _disconnect)
           else if (_step == _Step.noWaba)
             _NoWabaView(
-              onRetry: () => setState(() { _step = _Step.idle; _error = null; }),
+              onRetry: () => setState(() { _step = _Step.enterWaba; _error = null; }),
+            )
+          else if (_step == _Step.enterWaba)
+            _EnterWabaView(
+              controller: _wabaController,
+              onSubmit:   _fetchPhones,
+              onCancel:   () => setState(() { _step = _Step.idle; _code = null; _accessToken = null; _error = null; }),
             )
           else if (_step == _Step.picking)
             _PickerView(
@@ -262,6 +293,88 @@ class _DisconnectedView extends StatelessWidget {
           ),
         ),
       ),
+    ],
+  );
+}
+
+// ── VISTA: INGRESAR WABA ID ────────────────────────────────────────────────────
+
+class _EnterWabaView extends StatelessWidget {
+  final TextEditingController controller;
+  final VoidCallback          onSubmit;
+  final VoidCallback          onCancel;
+
+  const _EnterWabaView({
+    required this.controller,
+    required this.onSubmit,
+    required this.onCancel,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        'Ingresá tu WhatsApp Business Account ID (WABA ID)',
+        style: TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
+      ),
+      const SizedBox(height: 6),
+      const Text(
+        'Lo encontrás en Meta Business Suite → Configuración → Cuentas de WhatsApp.',
+        style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.5),
+      ),
+      const SizedBox(height: 16),
+      TextField(
+        controller:    controller,
+        keyboardType:  TextInputType.number,
+        style:         const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+        decoration: InputDecoration(
+          hintText:     'Ej: 123456789012345',
+          hintStyle:    const TextStyle(color: AppColors.textSecondary),
+          filled:       true,
+          fillColor:    AppColors.background,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          border:       OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide:   const BorderSide(color: AppColors.border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide:   const BorderSide(color: AppColors.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide:   const BorderSide(color: AppColors.primary),
+          ),
+        ),
+        onSubmitted: (_) => onSubmit(),
+      ),
+      const SizedBox(height: 20),
+      Row(children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: onCancel,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.textSecondary,
+              side: const BorderSide(color: AppColors.border),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            child: const Text('Cancelar'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: FilledButton(
+            onPressed: onSubmit,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            child: const Text('Buscar números', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
+        ),
+      ]),
     ],
   );
 }
@@ -459,28 +572,29 @@ class _NoWabaView extends StatelessWidget {
             Row(children: [
               Icon(Icons.info_outline, color: AppColors.primary, size: 16),
               SizedBox(width: 8),
-              Text('No encontramos números en tu cuenta',
+              Text('No hay números en este WABA',
                   style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
             ]),
             SizedBox(height: 10),
             Text(
-              'Para usar WhatsApp Business en AXIIA necesitás:\n'
-              '1. Una cuenta de Meta Business Manager\n'
-              '2. Un WhatsApp Business Account (WABA)\n'
-              '3. Un número de teléfono registrado en ese WABA',
+              'El WABA ID que ingresaste no tiene números de teléfono registrados. '
+              'Para agregar un número:\n'
+              '1. Abrí Meta Business Suite\n'
+              '2. Ve a tu cuenta de WhatsApp Business\n'
+              '3. Agregá y verificá un número de teléfono',
               style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.6),
             ),
           ],
         ),
       ),
       const SizedBox(height: 16),
-      const Text('Seguí estos pasos para configurarlo:',
+      const Text('Pasos para agregar un número:',
           style: TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
       const SizedBox(height: 12),
-      _StepItem(number: '1', text: 'Creá tu cuenta en Meta Business Manager'),
-      _StepItem(number: '2', text: 'Dentro de Business Manager, creá un WhatsApp Business Account'),
-      _StepItem(number: '3', text: 'Agregá y verificá tu número de teléfono'),
-      _StepItem(number: '4', text: 'Volvé acá y hacé clic en "Reintentar"'),
+      _StepItem(number: '1', text: 'Abrí Meta Business Suite → Configuración'),
+      _StepItem(number: '2', text: 'Ir a "Cuentas de WhatsApp" y seleccionar tu WABA'),
+      _StepItem(number: '3', text: 'Hacer clic en "Agregar número de teléfono"'),
+      _StepItem(number: '4', text: 'Completar la verificación y volver acá'),
       const SizedBox(height: 20),
       Row(children: [
         Expanded(

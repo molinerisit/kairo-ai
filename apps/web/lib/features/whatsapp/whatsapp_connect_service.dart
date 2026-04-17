@@ -62,10 +62,12 @@ class WhatsAppConnectService {
   static Future<({List<PhoneNumberOption> accounts, String sessionId})> getAccounts({
     String? code,
     String? accessToken,
+    String? wabaId,
   }) async {
     final body = <String, dynamic>{};
     if (code        != null) body['code']         = code;
     if (accessToken != null) body['access_token'] = accessToken;
+    if (wabaId      != null) body['waba_id']      = wabaId;
     final data = await ApiClient.post('/api/whatsapp/accounts', body: body);
     final list = (data['accounts'] as List<dynamic>)
         .map((e) => PhoneNumberOption.fromJson(e as Map<String, dynamic>))
