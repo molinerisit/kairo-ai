@@ -75,6 +75,8 @@ export async function getAvailableAccounts(input: { code?: string; access_token?
 
   // 2. Fetchear businesses → WABAs → números
   const bizRes = await graphGet('/me/businesses', token, 'id,name,owned_whatsapp_business_accounts{id,name}');
+  console.log('[WhatsApp] /me/businesses →', JSON.stringify(bizRes));
+
   const businesses: any[] = (bizRes as any)?.data ?? [];
   const numbers: PhoneNumberOption[] = [];
 
@@ -82,6 +84,7 @@ export async function getAvailableAccounts(input: { code?: string; access_token?
     const wabas: any[] = biz.owned_whatsapp_business_accounts?.data ?? [];
     for (const waba of wabas) {
       const phoneRes = await graphGet(`/${waba.id}/phone_numbers`, token, 'id,display_phone_number,verified_name');
+      console.log(`[WhatsApp] /${waba.id}/phone_numbers →`, JSON.stringify(phoneRes));
       for (const phone of (phoneRes as any)?.data ?? []) {
         numbers.push({
           phone_number_id:      phone.id,
@@ -93,6 +96,8 @@ export async function getAvailableAccounts(input: { code?: string; access_token?
       }
     }
   }
+
+  console.log('[WhatsApp] números encontrados:', numbers.length);
 
   // 3. Guardar token en sesión temporal (el cliente solo recibe el session_id)
   const session_id = storeSession(token);
