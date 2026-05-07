@@ -1,7 +1,6 @@
 import { query } from '../../shared/db/pool';
 import { createConversation } from '../conversations/conversations.service';
 import { runSecretary } from '../agents/secretary.agent';
-import { env } from '../../config/env';
 
 // ── TIPOS DEL WEBHOOK DE WHATSAPP ─────────────────────────────────────────────
 // La WhatsApp Business API envía eventos en este formato.
@@ -53,8 +52,8 @@ export async function processIncomingMessage(
 ): Promise<void> {
   // 1. Encontrar qué tenant tiene este número de WhatsApp
   //    Resolvemos por whatsapp_connections.phone_number_id (arquitectura multi-tenant)
-  const tenantResult = await query<{ tenant_id: string }>(
-    `SELECT tenant_id FROM whatsapp_connections
+  const tenantResult = await query<{ tenant_id: string; access_token: string }>(
+    `SELECT tenant_id, access_token FROM whatsapp_connections
      WHERE phone_number_id = $1 AND status = 'active'`,
     [phoneNumberId]
   );
@@ -64,8 +63,8 @@ export async function processIncomingMessage(
     return;
   }
 
-  const tenantId = tenantResult.rows[0].tenant_id;
-  const phone    = `+${from}`;
+  const { tenant_id: tenantId, access_token: accessToken } = tenantResult.rows[0];
+  const phone = `+${from}`;
 
   // 2. Buscar conversación existente de este contacto o crear una nueva
   const convResult = await query<{ id: string }>(
@@ -93,8 +92,8 @@ export async function processIncomingMessage(
   // 3. Llamar al agente secretario (guarda mensaje user + genera respuesta assistant)
   const result = await runSecretary({ tenantId, conversationId, userMessage: messageText });
 
-  // 4. Enviar la respuesta por WhatsApp
-  await sendWhatsAppMessage(from, result.response, phoneNumberId);
+  // 4. Enviar la respuesta por WhatsApp usando el token del tenant
+  await sendWhatsAppMessage(from, result.response, phoneNumberId, accessToken);
 }
 
 // ── ENVIAR MENSAJE POR WHATSAPP ───────────────────────────────────────────────
@@ -102,20 +101,16 @@ export async function processIncomingMessage(
 async function sendWhatsAppMessage(
   to:            string,
   message:       string,
-  phoneNumberId: string
+  phoneNumberId: string,
+  accessToken:   string,
 ): Promise<void> {
-  if (!env.WHATSAPP_ACCESS_TOKEN) {
-    console.warn('[Webhook] WHATSAPP_ACCESS_TOKEN no configurado — mensaje no enviado');
-    return;
-  }
-
-  const url = `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`;
+  const url = `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`;
 
   const response = await fetch(url, {
     method:  'POST',
     headers: {
       'Content-Type':  'application/json',
-      'Authorization': `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
+      'Authorization': `Bearer ${accessToken}`,
     },
     body: JSON.stringify({
       messaging_product: 'whatsapp',

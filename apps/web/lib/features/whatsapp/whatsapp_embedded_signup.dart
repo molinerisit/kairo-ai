@@ -61,7 +61,8 @@ class _WhatsAppConnectSectionState extends State<WhatsAppConnectSection> {
       final accounts = await WhatsAppConnectService.getAccounts(code: code);
 
       if (accounts.isEmpty) {
-        // Meta conectada, pero sin números — mostrar onboarding guiado
+        // ignore: avoid_print
+        print('[AXIIA] noNumbers — mostrando onboarding guiado v2');
         setState(() { _code = code; _step = _Step.noNumbers; });
         return;
       }
