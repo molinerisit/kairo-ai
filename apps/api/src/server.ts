@@ -63,7 +63,39 @@ app.get('/api/stats',        authMiddleware, statsController);
 app.use('/api/business-profile', businessProfileRoutes);
 app.use('/api/whatsapp',        whatsappConnectRoutes);
 
-// ── Health check ────────────────────────────────���─────────────────
+// ── Data Deletion Callback (Meta requerido) ───────────────────────
+// Meta llama a este endpoint cuando un usuario revoca permisos de la app.
+// Debe responder con { url, confirmation_code } para que Meta muestre
+// al usuario dónde puede ver el estado de su solicitud.
+app.post('/api/data-deletion', (req, res) => {
+  const { createHmac, randomBytes } = require('crypto');
+  const appSecret = env.META_APP_SECRET;
+  const signedRequest = req.body?.signed_request as string | undefined;
+
+  if (appSecret && signedRequest) {
+    try {
+      const [encodedSig, payload] = signedRequest.split('.');
+      const expectedSig = createHmac('sha256', appSecret)
+        .update(payload)
+        .digest('base64url');
+      if (encodedSig !== expectedSig) {
+        res.status(400).json({ error: 'Invalid signature' });
+        return;
+      }
+    } catch {
+      res.status(400).json({ error: 'Malformed signed_request' });
+      return;
+    }
+  }
+
+  const confirmationCode = randomBytes(8).toString('hex');
+  res.json({
+    url: 'https://getaxiia.com/data-deletion',
+    confirmation_code: confirmationCode,
+  });
+});
+
+// ── Health check ────────────────────────────────────────────────────
 // Endpoint simple para verificar que el servidor está corriendo.
 // Usado por CI/CD y servicios de monitoreo.
 app.get('/health', (_req, res) => {
