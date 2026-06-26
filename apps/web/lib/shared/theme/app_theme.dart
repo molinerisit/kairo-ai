@@ -1,32 +1,32 @@
 import 'package:flutter/material.dart';
 
-// Colores base de AXIIA — dark theme
-// Se definen una sola vez acá y se usan en toda la app.
-// Si mañana cambia el color primario, cambiamos solo esta línea.
+// Colores base de AXIIA — light theme
+// Se definen una sola vez acá y se usan en toda la app vía nombres semánticos.
+// Marca: navy + azul #005BFE sobre fondos claros.
 class AppColors {
   AppColors._();
 
-  static const background   = Color(0xFF0A0A0F); // fondo principal
-  static const surface      = Color(0xFF13131A); // cards y paneles
-  static const surfaceLight = Color(0xFF1C1C27); // hover, inputs
-  static const border       = Color(0xFF2A2A3A); // bordes sutiles
+  static const background   = Color(0xFFF6F8FF); // fondo principal (claro con tinte azul)
+  static const surface      = Color(0xFFFFFFFF); // cards y paneles
+  static const surfaceLight = Color(0xFFEEF2FB); // inputs / hover
+  static const border       = Color(0xFFE7ECF7); // bordes suaves
   static const primary      = Color(0xFF005BFE); // acento principal (azul de marca AXIIA)
-  static const primaryLight = Color(0xFF4D8BFF); // acento hover (azul claro)
-  static const textPrimary  = Color(0xFFF0F0F5); // texto principal
-  static const textSecondary= Color(0xFF8888AA); // texto secundario
-  static const success      = Color(0xFF22C55E); // verde
+  static const primaryLight = Color(0xFF4D8BFF); // acento hover
+  static const textPrimary  = Color(0xFF0B1635); // texto principal (navy)
+  static const textSecondary= Color(0xFF5C6B8A); // texto secundario (slate)
+  static const success      = Color(0xFF16A34A); // verde
   static const warning      = Color(0xFFF59E0B); // amarillo
-  static const danger       = Color(0xFFEF4444); // rojo
+  static const danger       = Color(0xFFDC2626); // rojo
 }
 
 class AppTheme {
   AppTheme._();
 
-  static ThemeData get dark => ThemeData(
+  static ThemeData get light => ThemeData(
     useMaterial3: true,
-    brightness: Brightness.dark,
+    brightness: Brightness.light,
     scaffoldBackgroundColor: AppColors.background,
-    colorScheme: const ColorScheme.dark(
+    colorScheme: const ColorScheme.light(
       primary:   AppColors.primary,
       surface:   AppColors.surface,
       onPrimary: Colors.white,

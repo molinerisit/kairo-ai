@@ -135,7 +135,7 @@ class _AxiiaAppState extends State<AxiiaApp> {
       value: _authProvider,
       child: MaterialApp.router(
         title: 'AXIIA',
-        theme: AppTheme.dark,
+        theme: AppTheme.light,
         routerConfig: _router,
         debugShowCheckedModeBanner: false,
       ),
