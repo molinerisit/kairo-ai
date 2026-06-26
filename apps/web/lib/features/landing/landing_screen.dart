@@ -67,8 +67,6 @@ class _Navbar extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: _maxW),
               child: Row(
                 children: [
-                  const _LogoMark(size: 30),
-                  const SizedBox(width: 10),
                   const _GradientText('AXIIA',
                       style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: 2)),
                   const Spacer(),
@@ -171,6 +169,16 @@ class _HeroSection extends StatelessWidget {
             _GhostButton(label: 'Ver cómo funciona', onTap: () => context.go('/login')),
           ],
         ),
+        const SizedBox(height: 22),
+        const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle, color: AppColors.success, size: 15),
+            SizedBox(width: 8),
+            Text('Sin tarjeta · Listo en minutos · Plan gratis para empezar',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+          ],
+        ),
       ],
     );
 
@@ -192,7 +200,7 @@ class _HeroSection extends StatelessWidget {
         const Positioned(top: -120, right: -80, child: _GlowBlob(size: 460, color: AppColors.primary, opacity: 0.22)),
         Positioned(top: 120, left: -120, child: _GlowBlob(size: 380, color: _accent2, opacity: 0.14)),
         Padding(
-          padding: EdgeInsets.symmetric(horizontal: narrow ? 24 : 48, vertical: narrow ? 64 : 110),
+          padding: EdgeInsets.symmetric(horizontal: narrow ? 24 : 48, vertical: narrow ? 56 : 84),
           child: Center(
             child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: _maxW), child: hero),
           ),
