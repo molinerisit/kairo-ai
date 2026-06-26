@@ -1,7 +1,7 @@
 {
-  "name": "@kairo/api",
+  "name": "@axiia/api",
   "version": "1.0.0",
-  "description": "Kairo AI — Backend API",
+  "description": "Axiia — Backend API",
   "type": "module",
   "main": "dist/server.js",
   "scripts": {

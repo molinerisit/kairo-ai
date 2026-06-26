@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Demo widget Kairos — Axiia</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #f7f8fb; color: #1a1816; }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 48px 24px 120px; }
+    h1 { font-size: 26px; }
+    p { line-height: 1.6; color: #475569; }
+    .card { background: #fff; border: 1px solid #e4ecf5; border-radius: 14px; padding: 20px; margin: 24px 0; }
+    code { background: #eef2f8; padding: 2px 6px; border-radius: 5px; }
+    input { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
+    button { margin-top: 10px; padding: 10px 18px; border: none; border-radius: 8px; background: #0B1D3F; color: #fff; font-weight: 700; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Sitio de prueba del cliente</h1>
+    <p>Esta página simula el sitio de un cliente que instaló el widget de Kairos.
+       Pegá tu <code>site_key</code> (la obtenés en <code>GET /api/widget/embed</code> con tu JWT del panel)
+       y se inyecta el script tal cual lo haría el cliente.</p>
+
+    <div class="card">
+      <label>site_key</label>
+      <input id="key" placeholder="ax_..." />
+      <button id="go">Cargar widget</button>
+    </div>
+
+    <p>También podés abrir directo: <code>/widget/demo.html?key=ax_...</code></p>
+  </div>
+
+  <script>
+    function load(key) {
+      if (!key) return;
+      var s = document.createElement('script');
+      s.src = '/widget/kairos.js';
+      s.setAttribute('data-axiia-key', key);
+      s.defer = true;
+      document.body.appendChild(s);
+    }
+    var q = new URLSearchParams(location.search).get('key');
+    if (q) load(q);
+    document.getElementById('go').onclick = function () {
+      load(document.getElementById('key').value.trim());
+    };
+  </script>
+</body>
+</html>

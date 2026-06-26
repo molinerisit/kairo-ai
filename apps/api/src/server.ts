@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'path';
 import { env } from './config/env';
 import authRoutes          from './modules/auth/auth.routes';
 import tablesRoutes        from './modules/tables/tables.routes';
@@ -11,17 +12,21 @@ import webhookRoutes       from './modules/webhook/webhook.routes';
 import { statsController } from './modules/stats/stats.controller';
 import businessProfileRoutes from './modules/business-profile/business-profile.routes';
 import whatsappConnectRoutes from './modules/whatsapp-connect/whatsapp-connect.routes';
+import widgetRoutes          from './modules/widget/widget.routes';
 import { authMiddleware } from './shared/middleware/auth.middleware';
 
 const app = express();
 
 // ── Middlewares globales ──────────────────────────────────────────
-// helmet: agrega headers de seguridad HTTP automáticamente
-app.use(helmet());
+// helmet: agrega headers de seguridad HTTP automáticamente.
+// Desactivamos crossOriginResourcePolicy para que los assets del widget
+// (kairos.js + imágenes del bot) puedan cargarse desde sitios de terceros.
+app.use(helmet({ crossOriginResourcePolicy: false }));
 
-// cors: permite que el frontend (Flutter Web) llame a esta API
-// Acepta la URL de producción de Vercel, cualquier preview deploy (*.vercel.app)
-// y localhost en desarrollo.
+// ── CORS ──────────────────────────────────────────────────────────
+// El panel (Flutter Web) usa CORS restrictivo: solo getaxiia.com, previews
+// de Vercel y localhost. El widget embebible, en cambio, vive en sitios de
+// terceros, así que /widget y /api/widget usan CORS abierto.
 const ALLOWED_ORIGINS = [
   env.ALLOWED_ORIGIN,
   'https://getaxiia.com',
@@ -30,7 +35,7 @@ const ALLOWED_ORIGINS = [
   'http://localhost:8080',
 ].filter(Boolean) as string[];
 
-app.use(cors({
+const restrictiveCors = cors({
   origin: (origin, callback) => {
     // Sin origin (ej: curl, Postman) o dominio permitido exacto
     if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
@@ -39,7 +44,20 @@ app.use(cors({
     callback(new Error(`CORS: origin no permitido: ${origin}`));
   },
   credentials: true,
-}));
+});
+
+// CORS abierto para la superficie pública del widget (refleja el origin).
+const publicCors = cors({ origin: true });
+app.use(['/widget', '/api/widget'], publicCors);
+
+// CORS restrictivo para el resto de la API (panel).
+app.use((req, res, next) => {
+  if (req.path.startsWith('/widget') || req.path.startsWith('/api/widget')) return next();
+  restrictiveCors(req, res, next);
+});
+
+// Assets estáticos del widget: kairos.js + imágenes del bot (uno.png/dos.png).
+app.use('/widget', express.static(path.resolve(process.cwd(), 'public/widget')));
 
 // express.json: parsea el body de las requests como JSON.
 // La opción `verify` captura el raw body buffer para que el webhook de Meta
@@ -62,6 +80,7 @@ app.use('/api/webhook',      webhookRoutes);
 app.get('/api/stats',        authMiddleware, statsController);
 app.use('/api/business-profile', businessProfileRoutes);
 app.use('/api/whatsapp',        whatsappConnectRoutes);
+app.use('/api/widget',          widgetRoutes);
 
 // ── Data Deletion Callback (Meta requerido) ───────────────────────
 // Meta llama a este endpoint cuando un usuario revoca permisos de la app.

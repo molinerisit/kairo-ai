@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'settings_service.dart';
+import 'widget_settings_service.dart';
 import '../../shared/theme/app_theme.dart';
 import '../whatsapp/whatsapp_embedded_signup.dart';
 
@@ -77,6 +79,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _AgentSection(profile: _profile!, onSaved: _load),
                       const SizedBox(height: 24),
                       const WhatsAppConnectSection(),
+                      const SizedBox(height: 24),
+                      const _WidgetSection(),
                     ],
                   ),
                 ),
@@ -419,6 +423,212 @@ class _AgentSectionState extends State<_AgentSection> {
   }
 }
 
+
+// ── WIDGET WEB (KAIROS) ─────────────────────────────────────────────────────────
+
+class _WidgetSection extends StatefulWidget {
+  const _WidgetSection();
+
+  @override
+  State<_WidgetSection> createState() => _WidgetSectionState();
+}
+
+class _WidgetSectionState extends State<_WidgetSection> {
+  final _urlCtrl = TextEditingController();
+  WidgetEmbed? _embed;
+  bool _loadingEmbed = true;
+  String? _embedError;
+  bool _ingesting = false;
+  String? _ingestError;
+  WidgetIngestResult? _result;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEmbed();
+  }
+
+  @override
+  void dispose() {
+    _urlCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadEmbed() async {
+    setState(() { _loadingEmbed = true; _embedError = null; });
+    try {
+      final e = await WidgetSettingsService.getEmbed();
+      setState(() => _embed = e);
+    } catch (e) {
+      setState(() => _embedError = e.toString());
+    } finally {
+      setState(() => _loadingEmbed = false);
+    }
+  }
+
+  Future<void> _ingest() async {
+    final url = _urlCtrl.text.trim();
+    if (url.isEmpty) return;
+    setState(() { _ingesting = true; _ingestError = null; _result = null; });
+    try {
+      final r = await WidgetSettingsService.ingest(url);
+      setState(() => _result = r);
+    } catch (e) {
+      setState(() => _ingestError = e.toString());
+    } finally {
+      setState(() => _ingesting = false);
+    }
+  }
+
+  void _copySnippet() {
+    if (_embed == null) return;
+    Clipboard.setData(ClipboardData(text: _embed!.snippet));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Snippet copiado al portapapeles'), duration: Duration(seconds: 2)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionCard(
+      title:    'Widget web (Kairos)',
+      subtitle: 'Instalá el asistente en tu sitio y autoconfiguralo',
+      icon:     Icons.public_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Snippet ──────────────────────────────────────────────────────
+          const Text('1. Pegá este código en tu sitio web',
+              style: TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
+          if (_loadingEmbed)
+            const Center(child: Padding(
+              padding: EdgeInsets.all(12),
+              child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2),
+            ))
+          else if (_embedError != null)
+            Text(_embedError!, style: const TextStyle(color: AppColors.danger, fontSize: 12))
+          else if (_embed != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0B1D3F),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SelectableText(
+                    _embed!.snippet,
+                    style: const TextStyle(color: Color(0xFFB7C7E6), fontSize: 12.5, height: 1.5, fontFamily: 'monospace'),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: _copySnippet,
+                      icon: const Icon(Icons.copy_outlined, size: 15, color: AppColors.primary),
+                      label: const Text('Copiar', style: TextStyle(color: AppColors.primary, fontSize: 13)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          const SizedBox(height: 24),
+          const Divider(color: AppColors.border, height: 1),
+          const SizedBox(height: 24),
+
+          // ── Autoconfiguración ────────────────────────────────────────────
+          const Text('2. Autoconfigurá Kairos con el contenido de tu sitio',
+              style: TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          const Text(
+            'Analizamos tu web y generamos automáticamente el saludo, las respuestas y las opciones del asistente.',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.5),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _Field(controller: _urlCtrl, label: 'URL de tu sitio', hint: 'https://tunegocio.com'),
+              ),
+              const SizedBox(width: 12),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: FilledButton.icon(
+                  onPressed: _ingesting ? null : _ingest,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  ),
+                  icon: _ingesting
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.auto_fix_high_outlined, size: 16),
+                  label: Text(_ingesting ? 'Analizando...' : 'Analizar mi sitio',
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                ),
+              ),
+            ],
+          ),
+          if (_ingestError != null) ...[
+            const SizedBox(height: 8),
+            Text(_ingestError!, style: const TextStyle(color: AppColors.danger, fontSize: 12)),
+          ],
+          if (_result != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.success.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline, color: AppColors.success, size: 16),
+                      const SizedBox(width: 8),
+                      Text('Listo: analicé ${_result!.pagesCrawled} página(s) de tu sitio',
+                          style: const TextStyle(color: AppColors.success, fontSize: 13, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  if (_result!.greeting.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text('Saludo generado: "${_result!.greeting}"',
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.5)),
+                  ],
+                  if (_result!.quickReplies.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6, runSpacing: 6,
+                      children: _result!.quickReplies.map((q) => Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(99),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Text(q, style: const TextStyle(color: AppColors.textPrimary, fontSize: 11)),
+                      )).toList(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
 
 // ── CAMPO DE TEXTO REUTILIZABLE ────────────────────────────────────────────────
 

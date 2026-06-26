@@ -54,19 +54,9 @@
     }
 
     .axiia-icon {
-      width: 36px;
-      height: 36px;
-      background: linear-gradient(135deg, #6C63FF, #4ECDC4);
-      border-radius: 9px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .axiia-icon svg {
-      width: 20px;
-      height: 20px;
-      fill: white;
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
     }
 
     .axiia-wordmark {
@@ -81,8 +71,8 @@
     .spinner {
       width: 28px;
       height: 28px;
-      border: 2.5px solid rgba(108, 99, 255, 0.2);
-      border-top-color: #6C63FF;
+      border: 2.5px solid rgba(0, 91, 254, 0.2);
+      border-top-color: #005BFE;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
@@ -96,11 +86,7 @@
   <!-- Splash inmediato — se oculta cuando Flutter termina de inicializar -->
   <div id="flutter-loading">
     <div class="axiia-logo">
-      <div class="axiia-icon">
-        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-        </svg>
-      </div>
+      <img class="axiia-icon" src="icons/Icon-512.png" alt="AXIIA" />
       <span class="axiia-wordmark">AXIIA</span>
     </div>
     <div class="spinner"></div>
@@ -153,6 +139,9 @@
 
   <!-- Flutter bootstrap — se encarga de cargar el engine automáticamente -->
   <script src="flutter_bootstrap.js" async></script>
+
+  <!-- Kairos — el asistente de Axiia, funcionando en su propia landing -->
+  <script src="https://kairo-api-production-c547.up.railway.app/widget/kairos.js" data-axiia-key="ax_axiia_landing_2026" defer></script>
 
   <script>
     // Flutter dispara 'flutter-first-frame' cuando pinta su primer frame real.

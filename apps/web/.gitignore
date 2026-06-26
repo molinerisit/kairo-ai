@@ -44,3 +44,8 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 .vercel
+
+# Imágenes fuente de marca/landing (pesadas). La app usa las optimizadas en assets/.
+web/imagenes/
+web/icons/ChatGPT*.png
+web/icons/sinfondo*.png

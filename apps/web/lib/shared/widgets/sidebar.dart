@@ -45,14 +45,20 @@ class AppSidebar extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'KAIRO AI',
-                  style: TextStyle(
-                    fontSize: 11,
-                    letterSpacing: 3,
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w700,
-                  ),
+                Row(
+                  children: [
+                    Image.asset('assets/axiia_icon.png', height: 22),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'AXIIA',
+                      style: TextStyle(
+                        fontSize: 13,
+                        letterSpacing: 3,
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 const Text(

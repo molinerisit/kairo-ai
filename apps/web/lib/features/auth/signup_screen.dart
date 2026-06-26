@@ -54,8 +54,10 @@ class _SignupScreenState extends State<SignupScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Logo / nombre
+                Image.asset('assets/axiia_icon.png', height: 34),
+                const SizedBox(height: 14),
                 const Text(
-                  'Kairo AI',
+                  'AXIIA',
                   style: TextStyle(
                     fontSize: 13,
                     letterSpacing: 3,

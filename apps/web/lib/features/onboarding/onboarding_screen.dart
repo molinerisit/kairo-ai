@@ -94,7 +94,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               children: [
                 // ── Header ──────────────────────────────────────────────────
                 const Text(
-                  'Kairo AI',
+                  'AXIIA',
                   style: TextStyle(
                     fontSize: 13,
                     letterSpacing: 3,

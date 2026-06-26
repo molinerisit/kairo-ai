@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-// Colores base de Kairo AI — dark theme
+// Colores base de AXIIA — dark theme
 // Se definen una sola vez acá y se usan en toda la app.
 // Si mañana cambia el color primario, cambiamos solo esta línea.
 class AppColors {
@@ -10,8 +10,8 @@ class AppColors {
   static const surface      = Color(0xFF13131A); // cards y paneles
   static const surfaceLight = Color(0xFF1C1C27); // hover, inputs
   static const border       = Color(0xFF2A2A3A); // bordes sutiles
-  static const primary      = Color(0xFF6C63FF); // acento principal (violeta)
-  static const primaryLight = Color(0xFF8B85FF); // acento hover
+  static const primary      = Color(0xFF005BFE); // acento principal (azul de marca AXIIA)
+  static const primaryLight = Color(0xFF4D8BFF); // acento hover (azul claro)
   static const textPrimary  = Color(0xFFF0F0F5); // texto principal
   static const textSecondary= Color(0xFF8888AA); // texto secundario
   static const success      = Color(0xFF22C55E); // verde
