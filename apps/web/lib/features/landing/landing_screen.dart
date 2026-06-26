@@ -2,11 +2,29 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../shared/theme/app_theme.dart';
 
-// ── PALETA AUXILIAR DEL LANDING ─────────────────────────────────────────────────
-const _accent2 = Color(0xFF7FB0FF); // azul claro para gradientes
-const _maxW = 1180.0;
+// ── SISTEMA DE DISEÑO DEL LANDING (tema claro) ──────────────────────────────────
+const _bg       = Color(0xFFF6F8FF); // base clara con leve tinte azul
+const _surface  = Color(0xFFFFFFFF); // cards
+const _border   = Color(0xFFE7ECF7); // borde suave
+const _ink      = Color(0xFF0B1635); // navy de marca (títulos)
+const _muted    = Color(0xFF5C6B8A); // texto secundario
+const _accent   = Color(0xFF005BFE); // azul de marca
+const _accentLt = Color(0xFF4D8BFF);
+const _accent2  = Color(0xFF8FB6FF);
+const _success  = Color(0xFF16A34A);
+const _maxW     = 1180.0;
+
+// Sombra suave para dar profundidad a las cards (en vez de borders duros).
+const List<BoxShadow> _softShadow = [
+  BoxShadow(color: Color(0x14123A7A), blurRadius: 28, spreadRadius: -6, offset: Offset(0, 14)),
+];
+
+// Elementos focales oscuros (mockup, snippet, CTA) para contraste sobre el claro.
+const _darkGrad = LinearGradient(
+  begin: Alignment.topLeft, end: Alignment.bottomRight,
+  colors: [Color(0xFF0C1838), Color(0xFF0A1228)],
+);
 
 class LandingScreen extends StatelessWidget {
   const LandingScreen({super.key});
@@ -14,38 +32,46 @@ class LandingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: DecoratedBox(
-        // Tinte de fondo global, de negro a un violeta muy oscuro.
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF0A0A0F), Color(0xFF080E1C), Color(0xFF0A0A0F)],
-            stops: [0.0, 0.45, 1.0],
+      backgroundColor: _bg,
+      body: Stack(
+        children: [
+          // Fondo diseñado: gradiente claro + glows azules suaves (ambiente).
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                  colors: [Color(0xFFFFFFFF), Color(0xFFEFF4FF), Color(0xFFF6F8FF)],
+                  stops: [0.0, 0.32, 1.0],
+                ),
+              ),
+            ),
           ),
-        ),
-        child: const SingleChildScrollView(
-          child: Column(
-            children: [
-              _Navbar(),
-              _HeroSection(),
-              _StatsBand(),
-              _FeaturesSection(),
-              _ShowcaseSection(),
-              _WidgetSection(),
-              _HowItWorksSection(),
-              _CtaSection(),
-              _Footer(),
-            ],
+          const Positioned(top: -180, right: -130, child: _GlowBlob(size: 560, color: _accent, opacity: 0.10)),
+          const Positioned(top: 220, left: -160, child: _GlowBlob(size: 460, color: _accent2, opacity: 0.14)),
+          const Positioned(bottom: 200, right: -160, child: _GlowBlob(size: 420, color: _accent, opacity: 0.07)),
+          const SingleChildScrollView(
+            child: Column(
+              children: [
+                _Navbar(),
+                _HeroSection(),
+                _StatsBand(),
+                _FeaturesSection(),
+                _ShowcaseSection(),
+                _WidgetSection(),
+                _HowItWorksSection(),
+                _CtaSection(),
+                _Footer(),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
 
-// ── NAVBAR (glass) ───────────────────────────────────────────────────────────────
+// ── NAVBAR (glass claro) ─────────────────────────────────────────────────────────
 
 class _Navbar extends StatelessWidget {
   const _Navbar();
@@ -55,12 +81,12 @@ class _Navbar extends StatelessWidget {
     final narrow = MediaQuery.of(context).size.width < 720;
     return ClipRect(
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
         child: Container(
           padding: EdgeInsets.symmetric(horizontal: narrow ? 20 : 48, vertical: 16),
-          decoration: BoxDecoration(
-            color: AppColors.background.withValues(alpha: 0.55),
-            border: Border(bottom: BorderSide(color: AppColors.border.withValues(alpha: 0.6))),
+          decoration: const BoxDecoration(
+            color: Color(0xCCFFFFFF),
+            border: Border(bottom: BorderSide(color: _border)),
           ),
           child: Center(
             child: ConstrainedBox(
@@ -75,11 +101,7 @@ class _Navbar extends StatelessWidget {
                     _NavLink('Términos', () => context.go('/terms')),
                     const SizedBox(width: 12),
                   ],
-                  _GlowButton(
-                    label: 'Ingresar',
-                    onTap: () => context.go('/login'),
-                    compact: true,
-                  ),
+                  _GlowButton(label: 'Ingresar', onTap: () => context.go('/login'), compact: true),
                 ],
               ),
             ),
@@ -98,7 +120,7 @@ class _NavLink extends StatelessWidget {
   @override
   Widget build(BuildContext context) => TextButton(
         onPressed: onTap,
-        child: Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+        child: Text(label, style: const TextStyle(color: _muted, fontSize: 14, fontWeight: FontWeight.w500)),
       );
 }
 
@@ -116,26 +138,21 @@ class _HeroSection extends StatelessWidget {
       crossAxisAlignment: narrow ? CrossAxisAlignment.center : CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Badge
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
           decoration: BoxDecoration(
-            gradient: LinearGradient(colors: [
-              AppColors.primary.withValues(alpha: 0.18),
-              _accent2.withValues(alpha: 0.10),
-            ]),
+            color: _accent.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(30),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+            border: Border.all(color: _accent.withValues(alpha: 0.22)),
           ),
           child: const Row(mainAxisSize: MainAxisSize.min, children: [
             _PulseDot(),
             SizedBox(width: 8),
             Text('Powered by Meta WhatsApp Cloud API',
-                style: TextStyle(color: AppColors.primaryLight, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                style: TextStyle(color: _accent, fontSize: 12.5, fontWeight: FontWeight.w700)),
           ]),
         ),
         const SizedBox(height: 28),
-        // Wordmark gigante con gradiente
         _GradientText(
           'AXIIA',
           textAlign: narrow ? TextAlign.center : TextAlign.start,
@@ -147,7 +164,7 @@ class _HeroSection extends StatelessWidget {
           child: Text(
             'Tu asistente Kairos atiende, vende y responde 24/7 — por WhatsApp y en tu sitio web.',
             textAlign: narrow ? TextAlign.center : TextAlign.start,
-            style: const TextStyle(color: AppColors.textPrimary, fontSize: 22, height: 1.45, fontWeight: FontWeight.w600),
+            style: const TextStyle(color: _ink, fontSize: 22, height: 1.45, fontWeight: FontWeight.w700),
           ),
         ),
         const SizedBox(height: 14),
@@ -156,7 +173,7 @@ class _HeroSection extends StatelessWidget {
           child: Text(
             'Inteligencia artificial que aprende de tu negocio y convierte cada consulta en una oportunidad. Sin código, en minutos.',
             textAlign: narrow ? TextAlign.center : TextAlign.start,
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 16, height: 1.7),
+            style: const TextStyle(color: _muted, fontSize: 16, height: 1.7),
           ),
         ),
         const SizedBox(height: 36),
@@ -173,10 +190,10 @@ class _HeroSection extends StatelessWidget {
         const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.check_circle, color: AppColors.success, size: 15),
+            Icon(Icons.check_circle, color: _success, size: 15),
             SizedBox(width: 8),
             Text('Sin tarjeta · Listo en minutos · Plan gratis para empezar',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+                style: TextStyle(color: _muted, fontSize: 13, fontWeight: FontWeight.w500)),
           ],
         ),
       ],
@@ -193,24 +210,16 @@ class _HeroSection extends StatelessWidget {
             ],
           );
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        // Glow blobs de fondo
-        const Positioned(top: -120, right: -80, child: _GlowBlob(size: 460, color: AppColors.primary, opacity: 0.22)),
-        Positioned(top: 120, left: -120, child: _GlowBlob(size: 380, color: _accent2, opacity: 0.14)),
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: narrow ? 24 : 48, vertical: narrow ? 56 : 84),
-          child: Center(
-            child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: _maxW), child: hero),
-          ),
-        ),
-      ],
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: narrow ? 24 : 48, vertical: narrow ? 56 : 84),
+      child: Center(
+        child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: _maxW), child: hero),
+      ),
     );
   }
 }
 
-// ── MOCKUP DEL CHAT (con Kairos pestañeando) ────────────────────────────────────
+// ── MOCKUP DEL CHAT (oscuro, focal) ─────────────────────────────────────────────
 
 class _ChatMockup extends StatelessWidget {
   const _ChatMockup();
@@ -220,47 +229,42 @@ class _ChatMockup extends StatelessWidget {
     return _HoverScale(
       child: Container(
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: [Color(0xFF16131F), Color(0xFF101019)],
-          ),
+          gradient: _darkGrad,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+          border: Border.all(color: _accent.withValues(alpha: 0.25)),
           boxShadow: [
-            BoxShadow(color: AppColors.primary.withValues(alpha: 0.28), blurRadius: 60, spreadRadius: -10, offset: const Offset(0, 24)),
-            BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 30, offset: const Offset(0, 12)),
+            BoxShadow(color: _accent.withValues(alpha: 0.22), blurRadius: 70, spreadRadius: -12, offset: const Offset(0, 28)),
+            const BoxShadow(color: Color(0x22123A7A), blurRadius: 30, offset: Offset(0, 14)),
           ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header
             Container(
               padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
               decoration: const BoxDecoration(
-                gradient: LinearGradient(colors: [Color(0xFF101A2E), Color(0xFF0E1320)]),
+                gradient: LinearGradient(colors: [Color(0xFF11224A), Color(0xFF0C1838)]),
                 borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               ),
               child: Row(children: [
                 const _BlinkingKairos(size: 46),
                 const SizedBox(width: 12),
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Kairos', style: TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w800)),
+                  const Text('Kairos', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800)),
                   Row(children: [
                     Container(width: 7, height: 7, decoration: BoxDecoration(
-                      color: AppColors.success, shape: BoxShape.circle,
-                      boxShadow: [BoxShadow(color: AppColors.success.withValues(alpha: 0.7), blurRadius: 6)],
+                      color: _success, shape: BoxShape.circle,
+                      boxShadow: [BoxShadow(color: _success.withValues(alpha: 0.7), blurRadius: 6)],
                     )),
                     const SizedBox(width: 6),
-                    const Text('En línea · responde al instante', style: TextStyle(color: AppColors.textSecondary, fontSize: 11.5)),
+                    const Text('En línea · responde al instante', style: TextStyle(color: Colors.white60, fontSize: 11.5)),
                   ]),
                 ]),
               ]),
             ),
-            // Mensajes
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-              child: const Column(children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 18, 16, 18),
+              child: Column(children: [
                 _Bubble(text: 'Hola! ¿Tienen turno para mañana a la tarde?', fromUser: true),
                 SizedBox(height: 12),
                 _Bubble(text: '¡Hola! 👋 Sí, tenemos lugar mañana 16:30 y 18:00. ¿Te reservo alguno a tu nombre?', fromUser: false),
@@ -289,20 +293,17 @@ class _Bubble extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            gradient: fromUser
-                ? const LinearGradient(colors: [AppColors.primary, Color(0xFF003ECC)])
-                : null,
-            color: fromUser ? null : AppColors.surfaceLight,
+            gradient: fromUser ? const LinearGradient(colors: [_accent, Color(0xFF003ECC)]) : null,
+            color: fromUser ? null : const Color(0xFF16264D),
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(16),
               topRight: const Radius.circular(16),
               bottomLeft: Radius.circular(fromUser ? 16 : 4),
               bottomRight: Radius.circular(fromUser ? 4 : 16),
             ),
-            border: fromUser ? null : Border.all(color: AppColors.border),
           ),
           child: Text(text, style: TextStyle(
-            color: fromUser ? Colors.white : AppColors.textPrimary, fontSize: 13, height: 1.5)),
+            color: fromUser ? Colors.white : Colors.white.withValues(alpha: 0.9), fontSize: 13, height: 1.5)),
         ),
       ),
     );
@@ -320,11 +321,11 @@ class _QuickChipsRow extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.12),
+              color: _accent.withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+              border: Border.all(color: _accent.withValues(alpha: 0.45)),
             ),
-            child: Text(c, style: const TextStyle(color: AppColors.primaryLight, fontSize: 11.5, fontWeight: FontWeight.w600)),
+            child: Text(c, style: const TextStyle(color: _accentLt, fontSize: 11.5, fontWeight: FontWeight.w600)),
           ),
       ]),
     );
@@ -342,11 +343,12 @@ class _StatsBand extends StatelessWidget {
     return _Section(
       padding: EdgeInsets.symmetric(horizontal: narrow ? 24 : 48, vertical: 28),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
+        padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 24),
         decoration: BoxDecoration(
-          color: AppColors.surface.withValues(alpha: 0.6),
+          color: _surface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: _border),
+          boxShadow: _softShadow,
         ),
         child: const Wrap(
           alignment: WrapAlignment.spaceEvenly,
@@ -370,7 +372,7 @@ class _Stat extends StatelessWidget {
   Widget build(BuildContext context) => Column(mainAxisSize: MainAxisSize.min, children: [
         _GradientText(value, style: const TextStyle(fontSize: 38, fontWeight: FontWeight.w900)),
         const SizedBox(height: 4),
-        Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        Text(label, style: const TextStyle(color: _muted, fontSize: 13)),
       ]);
 }
 
@@ -414,30 +416,25 @@ class _GlowFeatureCard extends StatelessWidget {
         width: 320,
         padding: const EdgeInsets.all(26),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: [Color(0xFF15151F), Color(0xFF101017)],
-          ),
+          color: _surface,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: _border),
+          boxShadow: _softShadow,
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(
             width: 50, height: 50,
             decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [
-                AppColors.primary.withValues(alpha: 0.25),
-                _accent2.withValues(alpha: 0.12),
-              ]),
+              color: _accent.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(13),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+              border: Border.all(color: _accent.withValues(alpha: 0.18)),
             ),
-            child: Icon(icon, color: AppColors.primaryLight, size: 24),
+            child: Icon(icon, color: _accent, size: 24),
           ),
           const SizedBox(height: 18),
-          Text(title, style: const TextStyle(color: AppColors.textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+          Text(title, style: const TextStyle(color: _ink, fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 9),
-          Text(description, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13.5, height: 1.6)),
+          Text(description, style: const TextStyle(color: _muted, fontSize: 13.5, height: 1.6)),
         ]),
       ),
     );
@@ -485,9 +482,10 @@ class _ShowcaseCard extends StatelessWidget {
       child: Container(
         width: 520,
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: _surface,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: _border),
+          boxShadow: _softShadow,
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -501,18 +499,18 @@ class _ShowcaseCard extends StatelessWidget {
               Container(
                 width: 42, height: 42,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.12),
+                  color: _accent.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(11),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                  border: Border.all(color: _accent.withValues(alpha: 0.18)),
                 ),
-                child: Icon(icon, color: AppColors.primaryLight, size: 20),
+                child: Icon(icon, color: _accent, size: 20),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(title, style: const TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+                  Text(title, style: const TextStyle(color: _ink, fontSize: 16, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 4),
-                  Text(desc, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.5)),
+                  Text(desc, style: const TextStyle(color: _muted, fontSize: 13, height: 1.5)),
                 ]),
               ),
             ]),
@@ -535,29 +533,28 @@ class _WidgetSection extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
           decoration: BoxDecoration(
-            color: AppColors.success.withValues(alpha: 0.12),
+            color: _success.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(30),
-            border: Border.all(color: AppColors.success.withValues(alpha: 0.4)),
+            border: Border.all(color: _success.withValues(alpha: 0.30)),
           ),
           child: const Text('NUEVO · Widget web',
-              style: TextStyle(color: AppColors.success, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+              style: TextStyle(color: _success, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
         ),
         const SizedBox(height: 22),
         const _SectionTitle('Kairos también vive en tu sitio web', 'Una línea de código. Se autoinstala y se configura solo.'),
         const SizedBox(height: 36),
         _HoverScale(
-          glow: true,
           child: Container(
             constraints: const BoxConstraints(maxWidth: 760),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF14121F), Color(0xFF0E0D16)]),
+              gradient: _darkGrad,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+              boxShadow: [BoxShadow(color: _accent.withValues(alpha: 0.18), blurRadius: 40, spreadRadius: -10, offset: const Offset(0, 16))],
             ),
-            child: Row(children: [
-              const Icon(Icons.code_rounded, color: AppColors.primaryLight, size: 20),
-              const SizedBox(width: 14),
+            child: const Row(children: [
+              Icon(Icons.code_rounded, color: _accentLt, size: 20),
+              SizedBox(width: 14),
               Expanded(
                 child: SelectableText(
                   '<script src="https://api.getaxiia.com/widget/kairos.js"\n        data-axiia-key="ax_tu-clave" defer></script>',
@@ -617,27 +614,28 @@ class _StepCard extends StatelessWidget {
         width: 300,
         padding: const EdgeInsets.all(28),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: _surface,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: _border),
+          boxShadow: _softShadow,
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             _GradientText(number, style: const TextStyle(fontSize: 44, fontWeight: FontWeight.w900)),
             const Spacer(),
-            Icon(icon, color: AppColors.primaryLight, size: 26),
+            Icon(icon, color: _accent, size: 26),
           ]),
           const SizedBox(height: 16),
-          Text(title, style: const TextStyle(color: AppColors.textPrimary, fontSize: 17, fontWeight: FontWeight.w700, height: 1.3)),
+          Text(title, style: const TextStyle(color: _ink, fontSize: 17, fontWeight: FontWeight.w700, height: 1.3)),
           const SizedBox(height: 10),
-          Text(description, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13.5, height: 1.6)),
+          Text(description, style: const TextStyle(color: _muted, fontSize: 13.5, height: 1.6)),
         ]),
       ),
     );
   }
 }
 
-// ── CTA FINAL ──────────────────────────────────────────────────────────────────
+// ── CTA FINAL (panel oscuro focal) ──────────────────────────────────────────────
 
 class _CtaSection extends StatelessWidget {
   const _CtaSection();
@@ -652,12 +650,11 @@ class _CtaSection extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: [Color(0xFF0C1B3F), Color(0xFF0A1226)],
+            colors: [Color(0xFF0B1F4D), Color(0xFF0A1430)],
           ),
           borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
           boxShadow: [
-            BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 80, spreadRadius: -20, offset: const Offset(0, 30)),
+            BoxShadow(color: _accent.withValues(alpha: 0.28), blurRadius: 80, spreadRadius: -24, offset: const Offset(0, 30)),
           ],
         ),
         child: Column(children: [
@@ -665,12 +662,12 @@ class _CtaSection extends StatelessWidget {
           const SizedBox(height: 20),
           Text(
             '¿Listo para que Kairos\natienda por vos?',
-            style: TextStyle(color: AppColors.textPrimary, fontSize: narrow ? 28 : 38, fontWeight: FontWeight.w800, height: 1.25),
+            style: TextStyle(color: Colors.white, fontSize: narrow ? 28 : 38, fontWeight: FontWeight.w800, height: 1.25),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 14),
           const Text('Creá tu cuenta gratis y dejá tu asistente funcionando hoy.',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 16), textAlign: TextAlign.center),
+              style: TextStyle(color: Colors.white70, fontSize: 16), textAlign: TextAlign.center),
           const SizedBox(height: 32),
           _GlowButton(label: 'Crear cuenta gratis', icon: Icons.arrow_forward_rounded, onTap: () => context.go('/register')),
         ]),
@@ -695,32 +692,28 @@ class _Footer extends StatelessWidget {
           crossAxisAlignment: narrow ? CrossAxisAlignment.center : CrossAxisAlignment.start,
           children: [
             Column(crossAxisAlignment: narrow ? CrossAxisAlignment.center : CrossAxisAlignment.start, children: const [
-              Row(mainAxisSize: MainAxisSize.min, children: [
-                _LogoMark(size: 28),
-                SizedBox(width: 8),
-                _GradientText('AXIIA', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 1.5)),
-              ]),
+              _GradientText('AXIIA', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: 1.5)),
               SizedBox(height: 10),
               Text('Asistentes con IA para WhatsApp y web',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5, height: 1.6)),
+                  style: TextStyle(color: _muted, fontSize: 12.5, height: 1.6)),
             ]),
             if (!narrow) const Spacer(),
             if (narrow) const SizedBox(height: 24),
             Column(crossAxisAlignment: narrow ? CrossAxisAlignment.center : CrossAxisAlignment.end, children: [
               TextButton(onPressed: () => context.go('/privacy'),
-                  child: const Text('Política de privacidad', style: TextStyle(color: AppColors.textSecondary, fontSize: 13))),
+                  child: const Text('Política de privacidad', style: TextStyle(color: _muted, fontSize: 13))),
               TextButton(onPressed: () => context.go('/terms'),
-                  child: const Text('Términos de uso', style: TextStyle(color: AppColors.textSecondary, fontSize: 13))),
+                  child: const Text('Términos de uso', style: TextStyle(color: _muted, fontSize: 13))),
               const SizedBox(height: 4),
-              const Text('hola@getaxiia.com', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              const Text('hola@getaxiia.com', style: TextStyle(color: _muted, fontSize: 12)),
             ]),
           ],
         ),
         const SizedBox(height: 28),
-        Divider(color: AppColors.border.withValues(alpha: 0.6)),
+        const Divider(color: _border),
         const SizedBox(height: 16),
         const Text('© 2026 AXIIA. Todos los derechos reservados.',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 12), textAlign: TextAlign.center),
+            style: TextStyle(color: _muted, fontSize: 12), textAlign: TextAlign.center),
       ]),
     );
   }
@@ -730,7 +723,6 @@ class _Footer extends StatelessWidget {
 //  COMPONENTES REUTILIZABLES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Wrapper de sección: centra el contenido con ancho máximo y padding responsive.
 class _Section extends StatelessWidget {
   final Widget child;
   final EdgeInsets? padding;
@@ -757,17 +749,17 @@ class _SectionTitle extends StatelessWidget {
     final big = MediaQuery.of(context).size.width >= 720;
     return Column(children: [
       Text(title,
-          style: TextStyle(color: AppColors.textPrimary, fontSize: big ? 34 : 27, fontWeight: FontWeight.w800, height: 1.2),
+          style: TextStyle(color: _ink, fontSize: big ? 34 : 27, fontWeight: FontWeight.w800, height: 1.2),
           textAlign: TextAlign.center),
       const SizedBox(height: 12),
       Text(subtitle,
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 16, height: 1.5),
+          style: const TextStyle(color: _muted, fontSize: 16, height: 1.5),
           textAlign: TextAlign.center),
     ]);
   }
 }
 
-// Texto con gradiente violeta vía ShaderMask.
+// Texto con gradiente azul de marca vía ShaderMask.
 class _GradientText extends StatelessWidget {
   final String text;
   final TextStyle style;
@@ -778,23 +770,9 @@ class _GradientText extends StatelessWidget {
   Widget build(BuildContext context) {
     return ShaderMask(
       shaderCallback: (bounds) => const LinearGradient(
-        colors: [AppColors.primaryLight, AppColors.primary, _accent2],
+        colors: [_accentLt, _accent, Color(0xFF003ECC)],
       ).createShader(Rect.fromLTWH(0, 0, bounds.width, bounds.height)),
       child: Text(text, textAlign: textAlign, style: style.copyWith(color: Colors.white)),
-    );
-  }
-}
-
-// Logo: el ícono de marca "ii" (azul) con un leve glow.
-class _LogoMark extends StatelessWidget {
-  final double size;
-  const _LogoMark({required this.size});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size, height: size,
-      child: Image.asset('assets/axiia_icon.png', fit: BoxFit.contain),
     );
   }
 }
@@ -819,9 +797,9 @@ class _GlowButton extends StatelessWidget {
           child: Container(
             padding: EdgeInsets.symmetric(horizontal: compact ? 20 : 28, vertical: compact ? 11 : 16),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [AppColors.primaryLight, AppColors.primary]),
+              gradient: const LinearGradient(colors: [_accentLt, _accent]),
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.5), blurRadius: 24, spreadRadius: -4, offset: const Offset(0, 8))],
+              boxShadow: [BoxShadow(color: _accent.withValues(alpha: 0.40), blurRadius: 22, spreadRadius: -4, offset: const Offset(0, 8))],
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Text(label, style: TextStyle(color: Colors.white, fontSize: compact ? 14 : 16, fontWeight: FontWeight.w700)),
@@ -850,11 +828,12 @@ class _GhostButton extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
             decoration: BoxDecoration(
-              color: AppColors.surface.withValues(alpha: 0.6),
+              color: _surface,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: _border),
+              boxShadow: _softShadow,
             ),
-            child: Text(label, style: const TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
+            child: Text(label, style: const TextStyle(color: _ink, fontSize: 16, fontWeight: FontWeight.w600)),
           ),
         ),
       ),
@@ -889,8 +868,8 @@ class _PulseDot extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         width: 7, height: 7,
         decoration: BoxDecoration(
-          color: AppColors.success, shape: BoxShape.circle,
-          boxShadow: [BoxShadow(color: AppColors.success.withValues(alpha: 0.8), blurRadius: 8, spreadRadius: 1)],
+          color: _success, shape: BoxShape.circle,
+          boxShadow: [BoxShadow(color: _success.withValues(alpha: 0.8), blurRadius: 8, spreadRadius: 1)],
         ),
       );
 }
@@ -924,7 +903,7 @@ class _HoverScaleState extends State<_HoverScale> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             boxShadow: widget.glow && _hover
-                ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.35), blurRadius: 40, spreadRadius: -8)]
+                ? [BoxShadow(color: _accent.withValues(alpha: 0.28), blurRadius: 40, spreadRadius: -8, offset: const Offset(0, 16))]
                 : const [],
           ),
           child: widget.child,

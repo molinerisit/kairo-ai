@@ -25,7 +25,7 @@
     html, body {
       margin: 0;
       padding: 0;
-      background-color: #0A0A0F;
+      background-color: #FFFFFF;
       height: 100%;
     }
 
@@ -36,7 +36,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      background-color: #0A0A0F;
+      background: linear-gradient(180deg, #FFFFFF 0%, #EFF4FF 100%);
       z-index: 9999;
       transition: opacity 0.3s ease;
     }
@@ -54,8 +54,8 @@
     }
 
     .axiia-icon {
-      width: 40px;
-      height: 40px;
+      height: 58px;
+      width: auto;
       object-fit: contain;
     }
 
@@ -86,8 +86,7 @@
   <!-- Splash inmediato — se oculta cuando Flutter termina de inicializar -->
   <div id="flutter-loading">
     <div class="axiia-logo">
-      <img class="axiia-icon" src="icons/Icon-512.png" alt="AXIIA" />
-      <span class="axiia-wordmark">AXIIA</span>
+      <img class="axiia-icon" src="axiia_logo.png" alt="AXIIA" />
     </div>
     <div class="spinner"></div>
   </div>
