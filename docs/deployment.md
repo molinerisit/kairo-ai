@@ -38,28 +38,89 @@ META_APP_SECRET=                 ✓
 ```
 
 ### Cómo deployar
-Railway hace deploy automático al hacer push a `main`.
-Para deploy manual desde CLI:
+> ⚠️ El servicio Railway `kairo-api` **NO está conectado a GitHub** — un `git push`
+> a `main` **no** dispara deploy. Hay que deployar a mano con el CLI:
 ```bash
-railway up
+cd apps/api
+railway up                       # builda (Nixpacks) y deploya el código local
 ```
+- Dominio público real: **`https://kairo-api-production-c547.up.railway.app`**
+  (sale de la env `RAILWAY_PUBLIC_DOMAIN`; el `-5af7` viejo de esta doc quedó
+  desactualizado).
+- `OPENAI_API_KEY` debe estar seteada o el agente no responde.
 
 ---
 
 ## Frontend — Vercel
 
-### Configuración (`apps/web/vercel.json`)
-- Rewrites: todas las rutas apuntan a `index.html` (SPA routing)
-- Cache: assets estáticos cacheados 1 año (immutable)
+> ⚠️ **Leer esto entero antes de deployar el frontend.** Hay varias trampas que
+> ya rompieron producción una vez. Documentado el 2026-06-26.
 
-### Cómo deployar
-Vercel hace deploy automático al hacer push a `main`.
-Para deploy manual:
+### Datos del proyecto
+- **Proyecto Vercel:** `kairo-web` · **scope:** `julianmolineris-projects`
+  (cuenta `julianmolinerisonline@gmail.com`).
+- **Dominio:** usar **`https://www.getaxiia.com`**. El apex `getaxiia.com` está
+  **parked en Hostinger** (no apunta a Vercel) — si lo abrís a secas ves una
+  página de Hostinger, no la app. Para arreglarlo: apuntar el A/ALIAS del apex a
+  Vercel en el DNS de Hostinger.
+- URL técnica de Vercel: `https://kairo-web-ashen.vercel.app`.
+
+### ‼️ El proyecto NO compila Flutter en Vercel
+La config de Vercel tiene `buildCommand`, `outputDirectory` y `rootDirectory`
+**vacíos**. Vercel **sirve estáticamente** lo que se sube — NO corre
+`flutter build`. Por eso un `git push` de código **no actualiza el sitio** por sí
+solo; hay que subir el `build/web` ya compilado.
+
+### Cómo deployar (procedimiento correcto)
 ```bash
+# 1. Compilar localmente
 cd apps/web
-flutter build web
-vercel --prod
+flutter build web --no-tree-shake-icons
+
+# 2. Deployar el build estático A PRODUCCIÓN desde build/web
+cd build/web
+vercel --prod --yes --scope julianmolineris-projects
 ```
+- El `apps/web/build/web/vercel.json` define los **rewrites SPA** y los **headers
+  de caché**. Se sube junto con el build.
+- Si el CLI está logueado en otra cuenta (ej. `banana24hs`), correr
+  `vercel login` con la cuenta de Axiia y linkear: 
+  `vercel link --yes --project kairo-web --scope julianmolineris-projects`.
+
+### ❌ NO hacer
+- **NO** `vercel --prod` desde la **raíz del repo** → sube archivos crudos del
+  repo (sin compilar) y **rompe producción** (el sitio queda en 404 / listado de
+  archivos). Siempre deployar desde `apps/web/build/web`.
+- **NO** marcar `main.dart.js` / `flutter_bootstrap.js` como `immutable` en los
+  headers de caché. Flutter NO les cambia el nombre entre builds, así que el
+  browser se queda con la versión vieja **para siempre** (ver troubleshooting).
+  Deben ir `Cache-Control: public, max-age=0, must-revalidate`.
+
+### Rollback (si un deploy rompe prod)
+```bash
+# Listar deploys y promover uno bueno a producción
+vercel ls kairo-web --scope julianmolineris-projects
+vercel promote <url-del-deploy-bueno> --yes --scope julianmolineris-projects
+```
+
+### 🛠 Troubleshooting: "deployé pero el sitio se ve viejo / oscuro / sin cambios"
+Casi siempre es **caché HTTP del `main.dart.js`** (no un problema del deploy).
+1. Confirmar que el server SÍ tiene el build nuevo (comparar hashes):
+   ```bash
+   md5sum apps/web/build/web/main.dart.js
+   curl -s https://www.getaxiia.com/main.dart.js | md5sum   # debe coincidir
+   ```
+2. Verificar que el header NO sea `immutable`:
+   ```bash
+   curl -sI https://www.getaxiia.com/main.dart.js | grep -i cache-control
+   # esperado: public, max-age=0, must-revalidate
+   ```
+3. En el browser: **`Ctrl + Shift + R`** (hard refresh) una vez. Si seguís con
+   la versión vieja, el `main.dart.js` quedó cacheado `immutable` de un deploy
+   anterior → redeployar con el header corregido y hard-refresh.
+4. Para confirmar que es caché y no el build: en DevTools, en
+   `performance.getEntriesByType('resource')` el `main.dart.js` con
+   `transferSize: 0` significa que vino de caché, no de la red.
 
 ---
 
