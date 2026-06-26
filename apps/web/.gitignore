@@ -49,3 +49,5 @@ app.*.map.json
 web/imagenes/
 web/icons/ChatGPT*.png
 web/icons/sinfondo*.png
+
+.env*
